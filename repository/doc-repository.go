@@ -24,6 +24,9 @@ type DocRepository interface {
 	FindByID(id uint64) (entity.Doc, error)
 	FindDraftByID(id uint64) (entity.DocDraft, error)
 
+	DeleteByID(id uint64) error
+	DeleteDraftByID(id uint64) error
+
 	CloseDB() error
 }
 
@@ -127,4 +130,12 @@ func (db *database) FindDraftByID(id uint64) (entity.DocDraft, error) {
 		return entity.DocDraft{}, res.Error
 	}
 	return doc, nil
+}
+func (db *database) DeleteByID(id uint64) error {
+	res := db.connection.Delete(&entity.Doc{}, id)
+	return res.Error
+}
+func (db *database) DeleteDraftByID(id uint64) error {
+	res := db.connection.Delete(&entity.DocDraft{}, id)
+	return res.Error
 }

@@ -10,16 +10,16 @@ import (
 type DocController interface {
 	FindAll() ([]entity.Doc, error)
 	Save(*gin.Context) (entity.Doc, error)
-	SaveByID(int64, *gin.Context) (entity.Doc, error)
-	FindByID(id int64) (entity.Doc, error)
-	FindDraftByID(id int64) (entity.DocEaseJson, error)
-	ChangeState(id int64) (entity.Doc, error)
-	CanEdit(id int64) bool
-	CanEditDraft(id int64) bool
-	CreateDraftDoc() (entity.DocEaseJson, error)
-	FindDrafts() ([]entity.DocEaseJson, error)
-	SaveDraft(id int64, c *gin.Context) (entity.DocEaseJson, error)
-	RemoveDraft(id int64) (entity.DocEaseJson, error)
+	SaveByID(uint64, *gin.Context) (entity.Doc, error)
+	FindByID(id uint64) (entity.Doc, error)
+	FindDraftByID(id uint64) (entity.DocDraft, error)
+	ChangeState(id uint64) (entity.Doc, error)
+	CanEdit(id uint64) bool
+	CanEditDraft(id uint64) bool
+	CreateDraftDoc() (entity.DocDraft, error)
+	FindDrafts() ([]entity.DocDraft, error)
+	SaveDraft(id uint64, c *gin.Context) (entity.DocDraft, error)
+	RemoveDraft(id uint64) (entity.DocDraft, error)
 }
 
 type controller struct {
@@ -38,19 +38,19 @@ func (c *controller) FindAll() ([]entity.Doc, error) {
 	return docs, err
 }
 
-func (c *controller) FindByID(id int64) (entity.Doc, error) {
+func (c *controller) FindByID(id uint64) (entity.Doc, error) {
 	var doc entity.Doc
 	doc, err := c.service.FindByID(id)
 	return doc, err
 }
 
-func (c *controller) FindDraftByID(id int64) (entity.DocEaseJson, error) {
+func (c *controller) FindDraftByID(id uint64) (entity.DocDraft, error) {
 	var doc entity.DocDraft
 	doc, err := c.service.FindDraftByID(id)
 	if err != nil {
-		return entity.DocEaseJson{}, err
+		return entity.DocDraft{}, err
 	}
-	return c.service.ConvertDraftToDoc(doc), err
+	return doc, err
 }
 
 func (c *controller) Save(ctx *gin.Context) (entity.Doc, error) {
@@ -66,7 +66,7 @@ func (c *controller) Save(ctx *gin.Context) (entity.Doc, error) {
 	return doc, nil
 }
 
-func (c *controller) SaveByID(id int64, ctx *gin.Context) (entity.Doc, error) {
+func (c *controller) SaveByID(id uint64, ctx *gin.Context) (entity.Doc, error) {
 	var doc entity.Doc
 	//fmt.Println(ctx.Request.Body)
 	//fmt.Println(ctx.Request.Header)
@@ -81,7 +81,7 @@ func (c *controller) SaveByID(id int64, ctx *gin.Context) (entity.Doc, error) {
 	return doc, nil
 }
 
-func (c *controller) ChangeState(id int64) (entity.Doc, error) {
+func (c *controller) ChangeState(id uint64) (entity.Doc, error) {
 	doc, err := c.service.ChangeState(id)
 	if err != nil {
 		return doc, err
@@ -89,37 +89,33 @@ func (c *controller) ChangeState(id int64) (entity.Doc, error) {
 	return doc, nil
 }
 
-func (c *controller) CanEdit(id int64) bool {
+func (c *controller) CanEdit(id uint64) bool {
 	return c.service.CanEdit(id)
 }
 
-func (c *controller) CanEditDraft(id int64) bool {
+func (c *controller) CanEditDraft(id uint64) bool {
 	return c.service.CanEditDraft(id)
 }
 
-func (c *controller) CreateDraftDoc() (entity.DocEaseJson, error) {
+func (c *controller) CreateDraftDoc() (entity.DocDraft, error) {
 	docDraft, err := c.service.CreateDraftDoc()
 	if err != nil {
-		return entity.DocEaseJson{}, err
+		return entity.DocDraft{}, err
 	}
-	return c.service.ConvertDraftToDoc(docDraft), nil
+	return docDraft, nil
 }
 
-func (c *controller) FindDrafts() ([]entity.DocEaseJson, error) {
+func (c *controller) FindDrafts() ([]entity.DocDraft, error) {
 	var docs []entity.DocDraft
 	docs, err := c.service.FindDrafts()
 	if err != nil {
-		return make([]entity.DocEaseJson, 0), err
+		return make([]entity.DocDraft, 0), err
 	}
-	var resDocs []entity.DocEaseJson
-	for _, doc := range docs {
-		resDocs = append(resDocs, c.service.ConvertDraftToDoc(doc))
-	}
-	return resDocs, err
+	return docs, err
 }
 
-func (c *controller) SaveDraft(id int64, ctx *gin.Context) (entity.DocEaseJson, error) {
-	var doc entity.DocEaseJson
+func (c *controller) SaveDraft(id uint64, ctx *gin.Context) (entity.DocDraft, error) {
+	var doc entity.DocDraft
 	err := ctx.ShouldBindJSON(&doc)
 	if err != nil {
 		//fmt.Println("xxxxxxxxxxxxxxxxxxxxxx\n")
@@ -132,10 +128,7 @@ func (c *controller) SaveDraft(id int64, ctx *gin.Context) (entity.DocEaseJson, 
 	return doc, nil
 }
 
-func (c *controller) RemoveDraft(id int64) (entity.DocEaseJson, error) {
-	_, err := c.service.RemoveDraft(id)
-	if err != nil {
-		return entity.DocEaseJson{}, err
-	}
-	return entity.DocEaseJson{}, nil
+func (c *controller) RemoveDraft(id uint64) (entity.DocDraft, error) {
+	err := c.service.RemoveDraft(id)
+	return entity.DocDraft{}, err
 }

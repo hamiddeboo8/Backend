@@ -2,6 +2,7 @@ package main
 
 import (
 	"AccountingDoc/Gin-Server/controller"
+	"AccountingDoc/Gin-Server/repository"
 	"AccountingDoc/Gin-Server/service"
 	"strconv"
 
@@ -35,7 +36,8 @@ func CORS(c *gin.Context) {
 }
 
 var (
-	docService    service.DocService       = service.New()
+	docRepository repository.DocRepository = repository.NewDocRepository()
+	docService    service.DocService       = service.New(docRepository)
 	DocController controller.DocController = controller.New(docService)
 )
 
@@ -64,7 +66,7 @@ func main() {
 	})
 
 	r.GET("/docs/:id", func(c *gin.Context) {
-		id, _ := strconv.ParseInt(c.Param("id"), 10, 64)
+		id, _ := strconv.ParseUint(c.Param("id"), 10, 64)
 		res, err := DocController.FindByID(id)
 		if err == nil {
 			c.JSON(200, res)
@@ -74,7 +76,7 @@ func main() {
 	})
 
 	r.POST("/docs/:id", func(c *gin.Context) {
-		id, _ := strconv.ParseInt(c.Param("id"), 10, 64)
+		id, _ := strconv.ParseUint(c.Param("id"), 10, 64)
 		res, err := DocController.SaveByID(id, c)
 		if err == nil {
 			c.JSON(200, res)
@@ -83,7 +85,7 @@ func main() {
 		}
 	})
 	r.PUT("/docs/change_state/:id", func(c *gin.Context) {
-		id, _ := strconv.ParseInt(c.Param("id"), 10, 64)
+		id, _ := strconv.ParseUint(c.Param("id"), 10, 64)
 		res, err := DocController.ChangeState(id)
 		if err == nil {
 			c.JSON(200, res)
@@ -93,7 +95,7 @@ func main() {
 	})
 
 	r.GET("/docs/edit/:id", func(c *gin.Context) {
-		id, _ := strconv.ParseInt(c.Param("id"), 10, 64)
+		id, _ := strconv.ParseUint(c.Param("id"), 10, 64)
 		res := DocController.CanEdit(id)
 		if res {
 			c.JSON(200, res)
@@ -103,7 +105,7 @@ func main() {
 	})
 
 	r.GET("/docs/drafts/:id", func(c *gin.Context) {
-		id, _ := strconv.ParseInt(c.Param("id"), 10, 64)
+		id, _ := strconv.ParseUint(c.Param("id"), 10, 64)
 		res, err := DocController.FindDraftByID(id)
 		if err == nil {
 			c.JSON(200, res)
@@ -113,7 +115,7 @@ func main() {
 	})
 
 	r.GET("/docs/drafts/edit/:id", func(c *gin.Context) {
-		id, _ := strconv.ParseInt(c.Param("id"), 10, 64)
+		id, _ := strconv.ParseUint(c.Param("id"), 10, 64)
 		res := DocController.CanEditDraft(id)
 		if res {
 			c.JSON(200, res)
@@ -141,7 +143,7 @@ func main() {
 	})
 
 	r.PUT("/docs/drafts/:id", func(c *gin.Context) {
-		id, _ := strconv.ParseInt(c.Param("id"), 10, 64)
+		id, _ := strconv.ParseUint(c.Param("id"), 10, 64)
 		res, err := DocController.SaveDraft(id, c)
 		if err == nil {
 			c.JSON(200, res)
@@ -151,7 +153,7 @@ func main() {
 	})
 
 	r.PUT("/docs/drafts/delete/:id", func(c *gin.Context) {
-		id, _ := strconv.ParseInt(c.Param("id"), 10, 64)
+		id, _ := strconv.ParseUint(c.Param("id"), 10, 64)
 		res, err := DocController.RemoveDraft(id)
 		if err == nil {
 			c.JSON(200, res)

@@ -4,7 +4,6 @@ import (
 	"AccountingDoc/Gin-Server/entity"
 	"AccountingDoc/Gin-Server/repository"
 	"errors"
-	"fmt"
 	"strconv"
 
 	ptime "github.com/yaa110/go-persian-calendar"
@@ -21,10 +20,10 @@ type DocService interface {
 	CanEditDraft(id uint64) bool
 	CreateDraftDoc() (entity.DocDraft, error)
 	FindDrafts() ([]entity.DocDraft, error)
-	SaveDraftByID(uint64, entity.DocEaseJson) (entity.DocEaseJson, error)
-	RemoveDraft(id uint64) (entity.DocDraft, error)
-	ConvertDocToDraft(docD entity.DocEaseJson) entity.DocDraft
-	ConvertDraftToDoc(docD entity.DocDraft) entity.DocEaseJson
+	SaveDraftByID(uint64, entity.DocDraft) (entity.DocDraft, error)
+	RemoveDraft(id uint64) error
+	//ConvertDocToDraft(docD entity.DocDraft) entity.DocDraft
+	//ConvertDraftToDoc(docD entity.DocDraft) entity.DocDraft
 }
 
 type docService struct {
@@ -72,7 +71,7 @@ func (service *docService) FindDraftByID(id uint64) (entity.DocDraft, error) {
 	if err == nil {
 		return docDraft, nil
 	}
-	return docDraft, errors.New("DocDraft with id " + strconv.FormatInt(id, 10) + " Not Found")
+	return docDraft, errors.New("DocDraft with id " + strconv.FormatUint(id, 10) + " Not Found")
 }
 
 func (service *docService) Save(doc entity.Doc) (entity.Doc, error) {
@@ -136,20 +135,23 @@ func (service *docService) ChangeState(id uint64) (entity.Doc, error) {
 	return doc, err
 }
 
-func (service *docService) CanEdit(id int64) bool {
-	index := binarySearchDoc(service.docs, 0, len(service.docs), id)
-	if index == -1 {
+func (service *docService) CanEdit(id uint64) bool {
+	doc, err := service.docRepository.FindByID(id)
+	//index := binarySearchDoc(service.docs, 0, len(service.docs), id)
+	if err != nil {
 		return false
 	}
-	if service.docs[index].State == "دائمی" {
+	if doc.State == "دائمی" {
 		return false
 	}
 	return true
 }
 
-func (service *docService) CanEditDraft(id int64) bool {
+func (service *docService) CanEditDraft(id uint64) bool {
 	//multi client
-	return true
+	_, err := service.docRepository.FindDraftByID(id)
+	//index := binarySearchDoc(service.docs, 0, len(service.docs), id)
+	return err == nil
 }
 
 func (service *docService) CreateDraftDoc() (entity.DocDraft, error) {
@@ -162,49 +164,47 @@ func (service *docService) CreateDraftDoc() (entity.DocDraft, error) {
 
 func (service *docService) createNewDocDraft() (entity.DocDraft, error) {
 	var doc entity.DocDraft
-	doc.ID = service.generateID()
 	//geogDate := time.Now()
 	//hirjiDate, _ := hijri.CreateHijriDate(geogDate, hijri.Default)
 	pt := ptime.Now()
 	doc.DocDate = entity.Date{Year: pt.Year(), Month: int(pt.Month()), Day: pt.Day(), Hour: pt.Hour(), Minute: pt.Minute(), Second: pt.Second()}
-	doc.AtfNum = &service.globalVars.atfNumGlobal
-	doc.DocID = doc.AtfNum
+	doc.AtfNum = -1
+	doc.DocNum = 0
 	doc.MinorNum = ""
 	doc.Desc = ""
 	doc.State = "موقت"
-	doc.DailyNum = &service.globalVars.todayCount
+	doc.DailyNum = -1
 	doc.DocType = "عمومی"
 	doc.EmitSystem = "سیستم حسابداری"
 	doc.DocItems = make([]entity.DocItem, 0)
-	service.draftDocs = append(service.draftDocs, doc)
+	err := service.docRepository.SaveDraft(doc)
+	return doc, err
+}
+
+func (service *docService) SaveDraftByID(id uint64, doc entity.DocDraft) (entity.DocDraft, error) {
+	doc_temp, err := service.docRepository.FindDraftByID(id)
+	//index := binarySearchDraft(service.draftDocs, 0, len(service.draftDocs), id)
+	if err != nil {
+		return doc_temp, errors.New("DocDraft with id " + strconv.FormatUint(id, 10) + " Not Found")
+	}
+	err = service.docRepository.UpdateDraft(doc)
+	if err != nil {
+		return doc_temp, errors.New("DocDraft with id " + strconv.FormatUint(id, 10) + " cannot update")
+	}
 	return doc, nil
 }
 
-func (service *docService) generateID() int64 {
-	temp := service.globalVars.idGen
-	service.globalVars.idGen += 1
-	return temp
-}
-
-func (service *docService) SaveDraftByID(id int64, doc entity.DocEaseJson) (entity.DocEaseJson, error) {
-	index := binarySearchDraft(service.draftDocs, 0, len(service.draftDocs), id)
-	if index == -1 {
-		return entity.DocEaseJson{}, errors.New("DocDraft with id " + strconv.FormatInt(id, 10) + " Not Found")
+func (service *docService) RemoveDraft(id uint64) error {
+	err := service.docRepository.DeleteDraftByID(id)
+	//index := binarySearchDraft(service.draftDocs, 0, len(service.draftDocs), id)
+	if err != nil {
+		return errors.New("DocDraft with id " + strconv.FormatUint(id, 10) + " Not Found")
 	}
-	service.draftDocs[index] = service.ConvertDocToDraft(doc)
-	return doc, nil
+	//service.draftDocs = append(service.draftDocs[:index], service.draftDocs[index+1:]...)
+	return nil
 }
 
-func (service *docService) RemoveDraft(id int64) (entity.DocDraft, error) {
-	index := binarySearchDraft(service.draftDocs, 0, len(service.draftDocs), id)
-	if index == -1 {
-		return entity.DocDraft{}, errors.New("DocDraft with id " + strconv.FormatInt(id, 10) + " Not Found")
-	}
-	service.draftDocs = append(service.draftDocs[:index], service.draftDocs[index+1:]...)
-	return entity.DocDraft{}, nil
-}
-
-func compareDate(first entity.Date, second entity.Date) int {
+/*func compareDate(first entity.Date, second entity.Date) int {
 	if first.Year > second.Year {
 		return 1
 	}
@@ -237,9 +237,8 @@ func compareDate(first entity.Date, second entity.Date) int {
 		}
 	}
 	return -1
-}
-
-func (service *docService) DocIDsUpdate(index int) {
+}*/
+/*func (service *docService) DocIDsUpdate(index int) {
 	doc := service.docs[index]
 	temp := entity.Date{-1, -1, -1, -1, -1, -1}
 	tempAtf := -1
@@ -275,9 +274,8 @@ func (service *docService) DocIDsUpdate(index int) {
 			}
 		}
 	}
-}
-
-func (service *docService) ConvertDraftToDoc(docD entity.DocDraft) entity.DocEaseJson {
+}*/
+/*func (service *docService) ConvertDraftToDoc(docD entity.DocDraft) entity.DocEaseJson {
 	var doc entity.DocEaseJson
 	doc.AtfNum = *docD.AtfNum
 	doc.DailyNum = *docD.DocID
@@ -308,8 +306,8 @@ func (service *docService) ConvertDocToDraft(docD entity.DocEaseJson) entity.Doc
 	doc.State = docD.State
 	return doc
 }
-
-func binarySearchDoc(arr []entity.Doc, st int, en int, id int64) int {
+*/
+/*func binarySearchDoc(arr []entity.Doc, st int, en int, id int64) int {
 	if en == st {
 		return -1
 	}
@@ -349,3 +347,4 @@ func binarySearchDraft(arr []entity.DocDraft, st int, en int, id int64) int {
 		}
 	}
 }
+*/
