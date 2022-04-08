@@ -9,16 +9,16 @@ import (
 )
 
 type DocRepository interface {
-	Save(entity.Doc) error
-	Update(entity.Doc) error
+	Save(entity.Doc) (entity.Doc, error)
+	Update(entity.Doc) (entity.Doc, error)
 	Delete(entity.Doc) error
 	FindAll() ([]entity.Doc, error)
-	SaveDraft(entity.DocDraft) error
-	UpdateDraft(entity.DocDraft) error
+	SaveDraft(entity.DocDraft) (entity.DocDraft, error)
+	UpdateDraft(entity.DocDraft) (entity.DocDraft, error)
 	DeleteDraft(entity.DocDraft) error
 	FindAllDraft() ([]entity.DocDraft, error)
-	SaveGlobal(entity.GlobalVars) error
-	UpdateGlobal(entity.GlobalVars) error
+	SaveGlobal(entity.GlobalVars) (entity.GlobalVars, error)
+	UpdateGlobal(entity.GlobalVars) (entity.GlobalVars, error)
 	FindGlobal() (entity.GlobalVars, error)
 
 	FindByID(id uint64) (entity.Doc, error)
@@ -35,13 +35,45 @@ type database struct {
 }
 
 func NewDocRepository() DocRepository {
-	dsn := "host=localhost user=postgres password=123581321345589144Hamidreza. dbname=Gorm_Train port=5432"
+	dsn := "host=localhost user=postgres password=123581321345589144Hamidreza. dbname=AccountingDocs port=5432"
 	db, err := gorm.Open(postgres.Open(dsn), &gorm.Config{})
 	if err != nil {
 		panic("Error in openning Database")
 	}
 
-	db.AutoMigrate(&entity.Date{}, &entity.GlobalVars{}, &entity.DocItem{}, &entity.Doc{}, &entity.DocDraft{})
+	db.AutoMigrate(&entity.GlobalVars{}, &entity.Doc{}, &entity.DocDraft{}, &entity.DocItem{}, &entity.DocItemDraft{})
+
+	if db.Migrator().HasTable(&entity.GlobalVars{}) {
+		db.Migrator().DropTable(&entity.GlobalVars{})
+	}
+	if db.Migrator().HasTable(&entity.Doc{}) {
+		db.Migrator().DropTable(&entity.Doc{})
+	}
+	if db.Migrator().HasTable(&entity.DocDraft{}) {
+		db.Migrator().DropTable(&entity.DocDraft{})
+	}
+	if db.Migrator().HasTable(&entity.DocItem{}) {
+		db.Migrator().DropTable(&entity.DocItem{})
+	}
+	if db.Migrator().HasTable(&entity.DocItemDraft{}) {
+		db.Migrator().DropTable(&entity.DocItemDraft{})
+	}
+
+	if !db.Migrator().HasTable(&entity.GlobalVars{}) {
+		db.Migrator().CreateTable(&entity.GlobalVars{})
+	}
+	if !db.Migrator().HasTable(&entity.Doc{}) {
+		db.Migrator().CreateTable(&entity.Doc{})
+	}
+	if !db.Migrator().HasTable(&entity.DocDraft{}) {
+		db.Migrator().CreateTable(&entity.DocDraft{})
+	}
+	if !db.Migrator().HasTable(&entity.DocItem{}) {
+		db.Migrator().CreateTable(&entity.DocItem{})
+	}
+	if !db.Migrator().HasTable(&entity.DocItemDraft{}) {
+		db.Migrator().CreateTable(&entity.DocItemDraft{})
+	}
 
 	return &database{
 		connection: db,
@@ -60,13 +92,13 @@ func (db *database) CloseDB() error {
 	return nil
 }
 
-func (db *database) Save(doc entity.Doc) error {
+func (db *database) Save(doc entity.Doc) (entity.Doc, error) {
 	res := db.connection.Create(&doc)
-	return res.Error
+	return doc, res.Error
 }
-func (db *database) Update(doc entity.Doc) error {
+func (db *database) Update(doc entity.Doc) (entity.Doc, error) {
 	res := db.connection.Save(&doc)
-	return res.Error
+	return doc, res.Error
 }
 func (db *database) Delete(doc entity.Doc) error {
 	res := db.connection.Delete(&doc)
@@ -77,13 +109,13 @@ func (db *database) FindAll() ([]entity.Doc, error) {
 	res := db.connection.Set("gorm:auto_preload", true).Find(&docs)
 	return docs, res.Error
 }
-func (db *database) SaveDraft(docDraft entity.DocDraft) error {
+func (db *database) SaveDraft(docDraft entity.DocDraft) (entity.DocDraft, error) {
 	res := db.connection.Create(&docDraft)
-	return res.Error
+	return docDraft, res.Error
 }
-func (db *database) UpdateDraft(docDraft entity.DocDraft) error {
+func (db *database) UpdateDraft(docDraft entity.DocDraft) (entity.DocDraft, error) {
 	res := db.connection.Save(&docDraft)
-	return res.Error
+	return docDraft, res.Error
 }
 func (db *database) DeleteDraft(docDraft entity.DocDraft) error {
 	res := db.connection.Delete(&docDraft)
@@ -94,13 +126,13 @@ func (db *database) FindAllDraft() ([]entity.DocDraft, error) {
 	res := db.connection.Set("gorm:auto_preload", true).Find(&docDrafts)
 	return docDrafts, res.Error
 }
-func (db *database) SaveGlobal(x entity.GlobalVars) error {
+func (db *database) SaveGlobal(x entity.GlobalVars) (entity.GlobalVars, error) {
 	res := db.connection.Create(&x)
-	return res.Error
+	return x, res.Error
 }
-func (db *database) UpdateGlobal(x entity.GlobalVars) error {
+func (db *database) UpdateGlobal(x entity.GlobalVars) (entity.GlobalVars, error) {
 	res := db.connection.Save(&x)
-	return res.Error
+	return x, res.Error
 }
 func (db *database) FindGlobal() (entity.GlobalVars, error) {
 	var x entity.GlobalVars

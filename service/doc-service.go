@@ -97,12 +97,12 @@ func (service *docService) Save(doc entity.Doc) (entity.Doc, error) {
 		doc.DailyNum = glb.TodayCount
 		glb.TodayCount += 1
 		glb.AtfNumGlobal += 1
-		err = service.docRepository.UpdateGlobal(glb)
+		glb, err = service.docRepository.UpdateGlobal(glb)
 		if err != nil {
 			return entity.Doc{}, errors.New("cannot update total atf num")
 		}
 		//service.DocIDsUpdate(len(service.docs) - 1)
-		err = service.docRepository.Save(doc)
+		doc, err = service.docRepository.Save(doc)
 		return doc, err
 	}
 }
@@ -113,7 +113,7 @@ func (service *docService) SaveByID(id uint64, doc entity.Doc) (entity.Doc, erro
 	if err != nil {
 		return doc_temp, errors.New("Doc with id " + strconv.FormatUint(id, 10) + " Not Found")
 	}
-	err = service.docRepository.Update(doc)
+	doc, err = service.docRepository.Update(doc)
 	if err != nil {
 		return doc_temp, errors.New("Doc with id " + strconv.FormatUint(id, 10) + " cannot update")
 	}
@@ -131,7 +131,7 @@ func (service *docService) ChangeState(id uint64) (entity.Doc, error) {
 		return doc, errors.New("doc state is permanent")
 	}
 	doc.State = "دائمی"
-	err = service.docRepository.Update(doc)
+	doc, err = service.docRepository.Update(doc)
 	return doc, err
 }
 
@@ -167,7 +167,12 @@ func (service *docService) createNewDocDraft() (entity.DocDraft, error) {
 	//geogDate := time.Now()
 	//hirjiDate, _ := hijri.CreateHijriDate(geogDate, hijri.Default)
 	pt := ptime.Now()
-	doc.DocDate = entity.Date{Year: pt.Year(), Month: int(pt.Month()), Day: pt.Day(), Hour: pt.Hour(), Minute: pt.Minute(), Second: pt.Second()}
+	doc.Year = pt.Year()
+	doc.Month = int(pt.Month())
+	doc.Day = pt.Day()
+	doc.Hour = pt.Hour()
+	doc.Minute = pt.Minute()
+	doc.Second = pt.Second()
 	doc.AtfNum = -1
 	doc.DocNum = 0
 	doc.MinorNum = ""
@@ -176,8 +181,8 @@ func (service *docService) createNewDocDraft() (entity.DocDraft, error) {
 	doc.DailyNum = -1
 	doc.DocType = "عمومی"
 	doc.EmitSystem = "سیستم حسابداری"
-	doc.DocItems = make([]entity.DocItem, 0)
-	err := service.docRepository.SaveDraft(doc)
+	doc.DocItems = make([]entity.DocItemDraft, 0)
+	doc, err := service.docRepository.SaveDraft(doc)
 	return doc, err
 }
 
@@ -187,7 +192,7 @@ func (service *docService) SaveDraftByID(id uint64, doc entity.DocDraft) (entity
 	if err != nil {
 		return doc_temp, errors.New("DocDraft with id " + strconv.FormatUint(id, 10) + " Not Found")
 	}
-	err = service.docRepository.UpdateDraft(doc)
+	doc, err = service.docRepository.UpdateDraft(doc)
 	if err != nil {
 		return doc_temp, errors.New("DocDraft with id " + strconv.FormatUint(id, 10) + " cannot update")
 	}

@@ -43,6 +43,8 @@ var (
 
 func main() {
 
+	defer docRepository.CloseDB()
+
 	r := gin.Default()
 
 	r.Use(CORS)
@@ -52,7 +54,9 @@ func main() {
 		if err == nil {
 			c.JSON(200, res)
 		} else {
-			c.JSON(500, fmt.Errorf("%v", err))
+			c.JSON(500, gin.H{
+				"message": err.Error(),
+			})
 		}
 	})
 
@@ -61,7 +65,9 @@ func main() {
 		if err == nil {
 			c.JSON(200, res)
 		} else {
-			c.JSON(500, fmt.Errorf("%v", err))
+			c.JSON(500, gin.H{
+				"message": err.Error(),
+			})
 		}
 	})
 
@@ -71,7 +77,9 @@ func main() {
 		if err == nil {
 			c.JSON(200, res)
 		} else {
-			c.JSON(500, fmt.Errorf("%v", err))
+			c.JSON(500, gin.H{
+				"message": err.Error(),
+			})
 		}
 	})
 
@@ -81,7 +89,9 @@ func main() {
 		if err == nil {
 			c.JSON(200, res)
 		} else {
-			c.JSON(500, fmt.Errorf("%v", err))
+			c.JSON(500, gin.H{
+				"message": err.Error(),
+			})
 		}
 	})
 	r.PUT("/docs/change_state/:id", func(c *gin.Context) {
@@ -90,7 +100,9 @@ func main() {
 		if err == nil {
 			c.JSON(200, res)
 		} else {
-			c.JSON(500, fmt.Errorf("%v", err))
+			c.JSON(500, gin.H{
+				"message": err.Error(),
+			})
 		}
 	})
 
@@ -100,7 +112,9 @@ func main() {
 		if res {
 			c.JSON(200, res)
 		} else {
-			c.JSON(500, fmt.Errorf("%v", res))
+			c.JSON(500, gin.H{
+				"message": res,
+			})
 		}
 	})
 
@@ -110,7 +124,9 @@ func main() {
 		if err == nil {
 			c.JSON(200, res)
 		} else {
-			c.JSON(500, fmt.Errorf("%v", err))
+			c.JSON(500, gin.H{
+				"message": err.Error(),
+			})
 		}
 	})
 
@@ -120,7 +136,9 @@ func main() {
 		if res {
 			c.JSON(200, res)
 		} else {
-			c.JSON(500, fmt.Errorf("%v", res))
+			c.JSON(500, gin.H{
+				"message": res,
+			})
 		}
 	})
 
@@ -129,7 +147,9 @@ func main() {
 		if err == nil {
 			c.JSON(200, res)
 		} else {
-			c.JSON(500, fmt.Errorf("%v", err))
+			c.JSON(500, gin.H{
+				"message": err.Error(),
+			})
 		}
 	})
 
@@ -138,7 +158,9 @@ func main() {
 		if err == nil {
 			c.JSON(200, res)
 		} else {
-			c.JSON(500, fmt.Errorf("%v", err))
+			c.JSON(500, gin.H{
+				"message": err.Error(),
+			})
 		}
 	})
 
@@ -148,7 +170,9 @@ func main() {
 		if err == nil {
 			c.JSON(200, res)
 		} else {
-			c.JSON(500, fmt.Errorf("%v", err))
+			c.JSON(500, gin.H{
+				"message": err.Error(),
+			})
 		}
 	})
 
@@ -158,7 +182,9 @@ func main() {
 		if err == nil {
 			c.JSON(200, res)
 		} else {
-			c.JSON(500, fmt.Errorf("%v", err))
+			c.JSON(500, gin.H{
+				"message": err.Error(),
+			})
 		}
 	})
 

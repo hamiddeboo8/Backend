@@ -6,7 +6,7 @@ import (
 	"gorm.io/gorm"
 )
 
-type DocItem struct {
+type DocItemDraft struct {
 	ID        uint64         `json:"ID" gorm:"primaryKey;auto_increment"`
 	CreatedAt time.Time      `json:"-" gorm:"default.CURRENT_TIMESTAMP"`
 	UpdatedAt time.Time      `json:"-" gorm:"default.CURRENT_TIMESTAMP"`
@@ -24,5 +24,5 @@ type DocItem struct {
 
 	SaveDB bool `json:"SaveDB" gorm:"type:boolean"`
 
-	DocRefer uint64 `json:"-"`
+	DocDraftRefer uint64 `json:"-"`
 }

@@ -123,6 +123,7 @@ func (c *controller) SaveDraft(id uint64, ctx *gin.Context) (entity.DocDraft, er
 	}
 	_, err = c.service.SaveDraftByID(id, doc)
 	if err != nil {
+		//fmt.Println("yyyyyyyyyyyyyyyyyyyyyyy\n")
 		return doc, err
 	}
 	return doc, nil
