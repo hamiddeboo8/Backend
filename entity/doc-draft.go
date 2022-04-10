@@ -2,15 +2,12 @@ package entity
 
 import (
 	"time"
-
-	"gorm.io/gorm"
 )
 
 type DocDraft struct {
-	ID        uint64         `json:"ID" gorm:"primaryKey;auto_increment"`
-	CreatedAt time.Time      `json:"-" gorm:"default.CURRENT_TIMESTAMP"`
-	UpdatedAt time.Time      `json:"-" gorm:"default.CURRENT_TIMESTAMP"`
-	DeletedAt gorm.DeletedAt `json:"-" gorm:"default.CURRENT_TIMESTAMP;index"`
+	ID        uint64    `json:"ID" gorm:"primaryKey;auto_increment"`
+	CreatedAt time.Time `json:"-" gorm:"default.CURRENT_TIMESTAMP"`
+	UpdatedAt time.Time `json:"-" gorm:"default.CURRENT_TIMESTAMP"`
 
 	DocNum     int            `json:"DocNum" gorm:"type:int"`
 	Year       int            `gorm:"type:int"`
@@ -26,5 +23,7 @@ type DocDraft struct {
 	DailyNum   int            `json:"DailyNum" gorm:"int"`
 	DocType    string         `json:"DocType" gorm:"VARCHAR(30)"`
 	EmitSystem string         `json:"EmitSystem" gorm:"VARCHAR(50)"`
-	DocItems   []DocItemDraft `json:"DocItems" gorm:"foreignKey:DocDraftRefer"`
+	DocItems   []DocItemDraft `json:"DocItems" gorm:"foreignKey:DocDraftRefer;constraint:OnUpdate:CASCADE,OnDelete:CASCADE;"`
+
+	IsChanging bool `json:"-" gorm:"type:boolean"`
 }

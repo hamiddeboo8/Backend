@@ -20,6 +20,9 @@ type DocController interface {
 	FindDrafts() ([]entity.DocDraft, error)
 	SaveDraft(id uint64, c *gin.Context) (entity.DocDraft, error)
 	RemoveDraft(id uint64) (entity.DocDraft, error)
+
+	FindMoeins() ([]entity.Moein, error)
+	FindTafsilis() ([]entity.Tafsili, error)
 }
 
 type controller struct {
@@ -132,4 +135,15 @@ func (c *controller) SaveDraft(id uint64, ctx *gin.Context) (entity.DocDraft, er
 func (c *controller) RemoveDraft(id uint64) (entity.DocDraft, error) {
 	err := c.service.RemoveDraft(id)
 	return entity.DocDraft{}, err
+}
+
+func (c *controller) FindMoeins() ([]entity.Moein, error) {
+	var codes []entity.Moein
+	codes, err := c.service.FindMoeins()
+	return codes, err
+}
+func (c *controller) FindTafsilis() ([]entity.Tafsili, error) {
+	var codes []entity.Tafsili
+	codes, err := c.service.FindTafsilis()
+	return codes, err
 }

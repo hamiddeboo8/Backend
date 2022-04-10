@@ -24,6 +24,8 @@ type DocService interface {
 	RemoveDraft(id uint64) error
 	//ConvertDocToDraft(docD entity.DocDraft) entity.DocDraft
 	//ConvertDraftToDoc(docD entity.DocDraft) entity.DocDraft
+	FindMoeins() ([]entity.Moein, error)
+	FindTafsilis() ([]entity.Tafsili, error)
 }
 
 type docService struct {
@@ -144,7 +146,12 @@ func (service *docService) CanEdit(id uint64) bool {
 	if doc.State == "دائمی" {
 		return false
 	}
-	return true
+	if doc.IsChanging {
+		return false
+	}
+	doc.IsChanging = true
+	doc, err = service.docRepository.Update(doc)
+	return err == nil
 }
 
 func (service *docService) CanEditDraft(id uint64) bool {
@@ -207,6 +214,23 @@ func (service *docService) RemoveDraft(id uint64) error {
 	}
 	//service.draftDocs = append(service.draftDocs[:index], service.draftDocs[index+1:]...)
 	return nil
+}
+
+func (service *docService) FindMoeins() ([]entity.Moein, error) {
+	var codes []entity.Moein
+	codes, err := service.docRepository.FindMoeins()
+	if err != nil {
+		return codes, err
+	}
+	return codes, nil
+}
+func (service *docService) FindTafsilis() ([]entity.Tafsili, error) {
+	var codes []entity.Tafsili
+	codes, err := service.docRepository.FindTafsilis()
+	if err != nil {
+		return codes, err
+	}
+	return codes, nil
 }
 
 /*func compareDate(first entity.Date, second entity.Date) int {

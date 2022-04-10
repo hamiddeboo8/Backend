@@ -188,6 +188,28 @@ func main() {
 		}
 	})
 
+	r.GET("/docs/moeins", func(c *gin.Context) {
+		res, err := DocController.FindMoeins()
+		if err == nil {
+			c.JSON(200, res)
+		} else {
+			c.JSON(500, gin.H{
+				"message": err.Error(),
+			})
+		}
+	})
+
+	r.GET("/docs/tafsilis", func(c *gin.Context) {
+		res, err := DocController.FindTafsilis()
+		if err == nil {
+			c.JSON(200, res)
+		} else {
+			c.JSON(500, gin.H{
+				"message": err.Error(),
+			})
+		}
+	})
+
 	/*r.GET("/docs/create", func(c *gin.Context) {
 		res, err := DocController.NextDocInitial()
 		if err == nil {

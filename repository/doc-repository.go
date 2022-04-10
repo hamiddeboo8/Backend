@@ -3,6 +3,7 @@ package repository
 import (
 	"AccountingDoc/Gin-Server/entity"
 	"errors"
+	"fmt"
 
 	"gorm.io/driver/postgres"
 	"gorm.io/gorm"
@@ -26,6 +27,9 @@ type DocRepository interface {
 
 	DeleteByID(id uint64) error
 	DeleteDraftByID(id uint64) error
+
+	FindMoeins() ([]entity.Moein, error)
+	FindTafsilis() ([]entity.Tafsili, error)
 
 	CloseDB() error
 }
@@ -59,8 +63,18 @@ func NewDocRepository() DocRepository {
 		db.Migrator().DropTable(&entity.DocItemDraft{})
 	}
 
+	if !db.Migrator().HasTable(&entity.Moein{}) {
+		db.Migrator().CreateTable(&entity.Moein{})
+	}
+	if !db.Migrator().HasTable(&entity.Tafsili{}) {
+		db.Migrator().CreateTable(&entity.Tafsili{})
+	}
 	if !db.Migrator().HasTable(&entity.GlobalVars{}) {
 		db.Migrator().CreateTable(&entity.GlobalVars{})
+		glb := &entity.GlobalVars{}
+		glb.AtfNumGlobal = 1
+		glb.TodayCount = 1
+		db.Create(glb)
 	}
 	if !db.Migrator().HasTable(&entity.Doc{}) {
 		db.Migrator().CreateTable(&entity.Doc{})
@@ -97,6 +111,12 @@ func (db *database) Save(doc entity.Doc) (entity.Doc, error) {
 	return doc, res.Error
 }
 func (db *database) Update(doc entity.Doc) (entity.Doc, error) {
+	x := db.connection.Where("doc_refer = ?", doc.ID).Delete(&entity.DocItem{})
+	err := x.Error
+	if err != nil {
+		return entity.Doc{}, err
+	}
+	//fmt.Println(doc)
 	res := db.connection.Save(&doc)
 	return doc, res.Error
 }
@@ -114,6 +134,12 @@ func (db *database) SaveDraft(docDraft entity.DocDraft) (entity.DocDraft, error)
 	return docDraft, res.Error
 }
 func (db *database) UpdateDraft(docDraft entity.DocDraft) (entity.DocDraft, error) {
+	x := db.connection.Where("doc_draft_refer = ?", docDraft.ID).Delete(&entity.DocItemDraft{})
+	err := x.Error
+	if err != nil {
+		return entity.DocDraft{}, err
+	}
+	fmt.Println(docDraft)
 	res := db.connection.Save(&docDraft)
 	return docDraft, res.Error
 }
@@ -149,8 +175,10 @@ func (db *database) FindByID(id uint64) (entity.Doc, error) {
 		}
 		return entity.Doc{}, res.Error
 	}
+	var x []entity.DocItem
+	db.connection.Where("doc_refer = ?", id).Preload("Moein").Preload("Tafsili").Find(&x)
+	doc.DocItems = x
 	return doc, nil
-
 }
 func (db *database) FindDraftByID(id uint64) (entity.DocDraft, error) {
 	var doc entity.DocDraft
@@ -161,6 +189,9 @@ func (db *database) FindDraftByID(id uint64) (entity.DocDraft, error) {
 		}
 		return entity.DocDraft{}, res.Error
 	}
+	var x []entity.DocItemDraft
+	db.connection.Where("doc_draft_refer = ?", id).Preload("Moein").Preload("Tafsili").Find(&x)
+	doc.DocItems = x
 	return doc, nil
 }
 func (db *database) DeleteByID(id uint64) error {
@@ -170,4 +201,15 @@ func (db *database) DeleteByID(id uint64) error {
 func (db *database) DeleteDraftByID(id uint64) error {
 	res := db.connection.Delete(&entity.DocDraft{}, id)
 	return res.Error
+}
+
+func (db *database) FindMoeins() ([]entity.Moein, error) {
+	var codes []entity.Moein
+	res := db.connection.Set("gorm:auto_preload", true).Find(&codes)
+	return codes, res.Error
+}
+func (db *database) FindTafsilis() ([]entity.Tafsili, error) {
+	var codes []entity.Tafsili
+	res := db.connection.Set("gorm:auto_preload", true).Find(&codes)
+	return codes, res.Error
 }
