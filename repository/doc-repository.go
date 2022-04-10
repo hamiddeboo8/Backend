@@ -10,7 +10,7 @@ import (
 )
 
 type DocRepository interface {
-	Save(entity.Doc) (entity.Doc, error)
+	Save(entity.Doc) error
 	Update(entity.Doc) (entity.Doc, error)
 	Delete(entity.Doc) error
 	FindAll() ([]entity.Doc, error)
@@ -106,9 +106,9 @@ func (db *database) CloseDB() error {
 	return nil
 }
 
-func (db *database) Save(doc entity.Doc) (entity.Doc, error) {
+func (db *database) Save(doc entity.Doc) error {
 	res := db.connection.Create(&doc)
-	return doc, res.Error
+	return res.Error
 }
 func (db *database) Update(doc entity.Doc) (entity.Doc, error) {
 	x := db.connection.Where("doc_refer = ?", doc.ID).Delete(&entity.DocItem{})

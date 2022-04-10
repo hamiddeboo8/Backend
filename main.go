@@ -1,7 +1,7 @@
 package main
 
 import (
-	"AccountingDoc/Gin-Server/controller"
+	"AccountingDoc/Gin-Server/entity"
 	"AccountingDoc/Gin-Server/repository"
 	"AccountingDoc/Gin-Server/service"
 	"strconv"
@@ -37,8 +37,7 @@ func CORS(c *gin.Context) {
 
 var (
 	docRepository repository.DocRepository = repository.NewDocRepository()
-	docService    service.DocService       = service.New(docRepository)
-	DocController controller.DocController = controller.New(docService)
+	DocService    service.DocService       = service.New(docRepository)
 )
 
 func main() {
@@ -50,18 +49,29 @@ func main() {
 	r.Use(CORS)
 
 	r.POST("/docs", func(c *gin.Context) {
-		res, err := DocController.Save(c)
-		if err == nil {
-			c.JSON(200, res)
-		} else {
+		var doc entity.Doc
+		err := c.ShouldBindJSON(&doc)
+		if err != nil {
 			c.JSON(500, gin.H{
 				"message": err.Error(),
 			})
+		} else {
+			err = DocService.Save(doc)
+			//res, err := DocController.Save(c)
+			if err == nil {
+				c.JSON(200, gin.H{
+					"message": "Successfully Saved",
+				})
+			} else {
+				c.JSON(500, gin.H{
+					"message": err.Error(),
+				})
+			}
 		}
 	})
 
 	r.GET("/docs", func(c *gin.Context) {
-		res, err := DocController.FindAll()
+		res, err := DocService.FindAll()
 		if err == nil {
 			c.JSON(200, res)
 		} else {
@@ -72,78 +82,131 @@ func main() {
 	})
 
 	r.GET("/docs/:id", func(c *gin.Context) {
-		id, _ := strconv.ParseUint(c.Param("id"), 10, 64)
-		res, err := DocController.FindByID(id)
-		if err == nil {
-			c.JSON(200, res)
-		} else {
+		id, err := strconv.ParseUint(c.Param("id"), 10, 64)
+		if err != nil {
 			c.JSON(500, gin.H{
 				"message": err.Error(),
 			})
+		} else {
+			res, err := DocService.FindByID(id)
+			if err == nil {
+				c.JSON(200, res)
+			} else {
+				c.JSON(500, gin.H{
+					"message": err.Error(),
+				})
+			}
 		}
 	})
 
-	r.POST("/docs/:id", func(c *gin.Context) {
-		id, _ := strconv.ParseUint(c.Param("id"), 10, 64)
-		res, err := DocController.SaveByID(id, c)
-		if err == nil {
-			c.JSON(200, res)
-		} else {
+	r.PUT("/docs/:id", func(c *gin.Context) {
+		id, err := strconv.ParseUint(c.Param("id"), 10, 64)
+		if err != nil {
 			c.JSON(500, gin.H{
 				"message": err.Error(),
 			})
+		} else {
+			//race condition
+			var doc entity.Doc
+			err := c.ShouldBindJSON(&doc)
+			if err != nil {
+				c.JSON(500, gin.H{
+					"message": err.Error(),
+				})
+			} else {
+				err = DocService.SaveByID(id, doc)
+				if err != nil {
+					c.JSON(500, gin.H{
+						"message": err.Error(),
+					})
+				} else {
+					c.JSON(200, gin.H{
+						"message": "Successfully Updated",
+					})
+				}
+			}
 		}
 	})
 	r.PUT("/docs/change_state/:id", func(c *gin.Context) {
-		id, _ := strconv.ParseUint(c.Param("id"), 10, 64)
-		res, err := DocController.ChangeState(id)
-		if err == nil {
-			c.JSON(200, res)
-		} else {
+		id, err := strconv.ParseUint(c.Param("id"), 10, 64)
+		if err != nil {
 			c.JSON(500, gin.H{
 				"message": err.Error(),
 			})
+		} else {
+			err := DocService.ChangeState(id)
+			if err == nil {
+				c.JSON(200, gin.H{
+					"message": "Successfully Updated",
+				})
+			} else {
+				c.JSON(500, gin.H{
+					"message": err.Error(),
+				})
+			}
 		}
 	})
 
 	r.GET("/docs/edit/:id", func(c *gin.Context) {
-		id, _ := strconv.ParseUint(c.Param("id"), 10, 64)
-		res := DocController.CanEdit(id)
-		if res {
-			c.JSON(200, res)
-		} else {
+		id, err := strconv.ParseUint(c.Param("id"), 10, 64)
+		if err != nil {
 			c.JSON(500, gin.H{
-				"message": res,
+				"message": err.Error(),
 			})
+		} else {
+			err := DocService.CanEdit(id)
+			if err != nil {
+				c.JSON(200, gin.H{
+					"message": "Can be edited",
+				})
+			} else {
+				c.JSON(500, gin.H{
+					"message": err.Error(),
+				})
+			}
 		}
 	})
 
 	r.GET("/docs/drafts/:id", func(c *gin.Context) {
-		id, _ := strconv.ParseUint(c.Param("id"), 10, 64)
-		res, err := DocController.FindDraftByID(id)
-		if err == nil {
-			c.JSON(200, res)
-		} else {
+		id, err := strconv.ParseUint(c.Param("id"), 10, 64)
+		if err != nil {
 			c.JSON(500, gin.H{
 				"message": err.Error(),
 			})
+		} else {
+			res, err := DocService.FindDraftByID(id)
+			if err == nil {
+				c.JSON(200, res)
+			} else {
+				c.JSON(500, gin.H{
+					"message": err.Error(),
+				})
+			}
 		}
 	})
 
 	r.GET("/docs/drafts/edit/:id", func(c *gin.Context) {
-		id, _ := strconv.ParseUint(c.Param("id"), 10, 64)
-		res := DocController.CanEditDraft(id)
-		if res {
-			c.JSON(200, res)
-		} else {
+		id, err := strconv.ParseUint(c.Param("id"), 10, 64)
+		if err != nil {
 			c.JSON(500, gin.H{
-				"message": res,
+				"message": err.Error(),
 			})
+		} else {
+			err := DocService.CanEditDraft(id)
+			if err == nil {
+				c.JSON(200, gin.H{
+					"message": "Can be edited",
+				})
+			} else {
+				c.JSON(500, gin.H{
+					"message": err.Error(),
+				})
+			}
 		}
 	})
 
 	r.GET("/docs/drafts", func(c *gin.Context) {
-		res, err := DocController.FindDrafts()
+		res, err := DocService.FindDrafts()
 		if err == nil {
 			c.JSON(200, res)
 		} else {
@@ -154,7 +217,8 @@ func main() {
 	})
 
 	r.GET("/docs/drafts/create", func(c *gin.Context) {
-		res, err := DocController.CreateDraftDoc()
+		//because some initializes things like date or (if implement => atf and daily number)
+		res, err := DocService.CreateDraftDoc()
 		if err == nil {
 			c.JSON(200, res)
 		} else {
@@ -165,31 +229,60 @@ func main() {
 	})
 
 	r.PUT("/docs/drafts/:id", func(c *gin.Context) {
-		id, _ := strconv.ParseUint(c.Param("id"), 10, 64)
-		res, err := DocController.SaveDraft(id, c)
-		if err == nil {
-			c.JSON(200, res)
-		} else {
+		id, err := strconv.ParseUint(c.Param("id"), 10, 64)
+		if err != nil {
 			c.JSON(500, gin.H{
 				"message": err.Error(),
 			})
+		} else {
+			var doc entity.DocDraft
+			err := c.ShouldBindJSON(&doc)
+			if err != nil {
+				c.JSON(500, gin.H{
+					"message": err.Error(),
+				})
+			} else {
+				err = DocService.SaveDraftByID(id, doc)
+				if err != nil {
+					c.JSON(500, gin.H{
+						"message": err.Error(),
+					})
+				}
+				if err == nil {
+					c.JSON(200, gin.H{
+						"message": "Successfully Updated",
+					})
+				} else {
+					c.JSON(500, gin.H{
+						"message": err.Error(),
+					})
+				}
+			}
 		}
 	})
 
 	r.PUT("/docs/drafts/delete/:id", func(c *gin.Context) {
-		id, _ := strconv.ParseUint(c.Param("id"), 10, 64)
-		res, err := DocController.RemoveDraft(id)
-		if err == nil {
-			c.JSON(200, res)
-		} else {
+		id, err := strconv.ParseUint(c.Param("id"), 10, 64)
+		if err != nil {
 			c.JSON(500, gin.H{
 				"message": err.Error(),
 			})
+		} else {
+			err := DocService.RemoveDraft(id)
+			if err == nil {
+				c.JSON(200, gin.H{
+					"message": "Successfully Deleted",
+				})
+			} else {
+				c.JSON(500, gin.H{
+					"message": err.Error(),
+				})
+			}
 		}
 	})
 
 	r.GET("/docs/moeins", func(c *gin.Context) {
-		res, err := DocController.FindMoeins()
+		res, err := DocService.FindMoeins()
 		if err == nil {
 			c.JSON(200, res)
 		} else {
@@ -200,7 +293,7 @@ func main() {
 	})
 
 	r.GET("/docs/tafsilis", func(c *gin.Context) {
-		res, err := DocController.FindTafsilis()
+		res, err := DocService.FindTafsilis()
 		if err == nil {
 			c.JSON(200, res)
 		} else {
@@ -209,15 +302,6 @@ func main() {
 			})
 		}
 	})
-
-	/*r.GET("/docs/create", func(c *gin.Context) {
-		res, err := DocController.NextDocInitial()
-		if err == nil {
-			c.JSON(200, res)
-		} else {
-			c.JSON(500, fmt.Errorf("%v", err))
-		}
-	})*/
 
 	r.Run(":5710")
 }
