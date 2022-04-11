@@ -23,5 +23,5 @@ type DocItem struct {
 
 	SaveDB bool `json:"SaveDB" gorm:"type:boolean"`
 
-	DocRefer uint64 `json:"-" gorm:"primaryKey"`
+	DocRefer uint64 `json:"-" gorm:""`
 }

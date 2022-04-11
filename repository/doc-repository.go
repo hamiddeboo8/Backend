@@ -5,7 +5,6 @@ import (
 	"errors"
 	"fmt"
 
-	"gorm.io/driver/postgres"
 	"gorm.io/gorm"
 )
 
@@ -35,75 +34,6 @@ type DocRepository interface {
 }
 
 type database struct {
-	connection *gorm.DB
-}
-
-func NewDocRepository() DocRepository {
-	dsn := "host=localhost user=postgres password=123581321345589144Hamidreza. dbname=AccountingDocs port=5432"
-	db, err := gorm.Open(postgres.Open(dsn), &gorm.Config{})
-	if err != nil {
-		panic("Error in openning Database")
-	}
-
-	db.AutoMigrate(&entity.GlobalVars{}, &entity.Doc{}, &entity.DocDraft{}, &entity.DocItem{}, &entity.DocItemDraft{})
-
-	if db.Migrator().HasTable(&entity.GlobalVars{}) {
-		db.Migrator().DropTable(&entity.GlobalVars{})
-	}
-	if db.Migrator().HasTable(&entity.Doc{}) {
-		db.Migrator().DropTable(&entity.Doc{})
-	}
-	if db.Migrator().HasTable(&entity.DocDraft{}) {
-		db.Migrator().DropTable(&entity.DocDraft{})
-	}
-	if db.Migrator().HasTable(&entity.DocItem{}) {
-		db.Migrator().DropTable(&entity.DocItem{})
-	}
-	if db.Migrator().HasTable(&entity.DocItemDraft{}) {
-		db.Migrator().DropTable(&entity.DocItemDraft{})
-	}
-
-	if !db.Migrator().HasTable(&entity.Moein{}) {
-		db.Migrator().CreateTable(&entity.Moein{})
-	}
-	if !db.Migrator().HasTable(&entity.Tafsili{}) {
-		db.Migrator().CreateTable(&entity.Tafsili{})
-	}
-	if !db.Migrator().HasTable(&entity.GlobalVars{}) {
-		db.Migrator().CreateTable(&entity.GlobalVars{})
-		glb := &entity.GlobalVars{}
-		glb.AtfNumGlobal = 1
-		glb.TodayCount = 1
-		db.Create(glb)
-	}
-	if !db.Migrator().HasTable(&entity.Doc{}) {
-		db.Migrator().CreateTable(&entity.Doc{})
-	}
-	if !db.Migrator().HasTable(&entity.DocDraft{}) {
-		db.Migrator().CreateTable(&entity.DocDraft{})
-	}
-	if !db.Migrator().HasTable(&entity.DocItem{}) {
-		db.Migrator().CreateTable(&entity.DocItem{})
-	}
-	if !db.Migrator().HasTable(&entity.DocItemDraft{}) {
-		db.Migrator().CreateTable(&entity.DocItemDraft{})
-	}
-
-	return &database{
-		connection: db,
-	}
-}
-
-func (db *database) CloseDB() error {
-	postgresDB, err := db.connection.DB()
-	if err != nil {
-		return errors.New("error in generic database")
-	}
-	err = postgresDB.Close()
-	if err != nil {
-		return errors.New("error in closing database")
-	}
-	return nil
 }
 
 func (db *database) Save(doc entity.Doc) error {
@@ -154,7 +84,7 @@ func (db *database) FindAllDraft() ([]entity.DocDraft, error) {
 }
 func (db *database) SaveGlobal(x entity.GlobalVars) (entity.GlobalVars, error) {
 	res := db.connection.Create(&x)
-	return x, res.Error
+	return x, res.Errors
 }
 func (db *database) UpdateGlobal(x entity.GlobalVars) (entity.GlobalVars, error) {
 	res := db.connection.Save(&x)

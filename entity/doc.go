@@ -23,7 +23,7 @@ type Doc struct {
 	DailyNum   int       `json:"DailyNum" gorm:"int"`
 	DocType    string    `json:"DocType" binding:"required" gorm:"VARCHAR(30)"`
 	EmitSystem string    `json:"EmitSystem" binding:"required" gorm:"VARCHAR(50)"`
-	DocItems   []DocItem `json:"DocItems" binding:"required" gorm:"foreignKey:DocRefer;constraint:OnUpdate:CASCADE,OnDelete:CASCADE;"`
+	DocItems   []DocItem `json:"DocItems" gorm:"foreignKey:DocRefer;constraint:OnUpdate:CASCADE,OnDelete:CASCADE;"`
 
 	IsChanging bool `json:"-" gorm:"type:boolean"`
 }

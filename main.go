@@ -2,13 +2,13 @@ package main
 
 import (
 	"AccountingDoc/Gin-Server/entity"
-	"AccountingDoc/Gin-Server/repository"
 	"AccountingDoc/Gin-Server/service"
 	"strconv"
 
 	"fmt"
 
 	"github.com/gin-gonic/gin"
+	"gorm.io/gorm"
 )
 
 func CORS(c *gin.Context) {
@@ -36,13 +36,13 @@ func CORS(c *gin.Context) {
 }
 
 var (
-	docRepository repository.DocRepository = repository.NewDocRepository()
-	DocService    service.DocService       = service.New(docRepository)
+	db         *gorm.DB           = service.NewDbConnection()
+	DocService service.DocService = service.New(db)
 )
 
 func main() {
 
-	defer docRepository.CloseDB()
+	defer DocService.CloseDB()
 
 	r := gin.Default()
 
@@ -107,7 +107,7 @@ func main() {
 			})
 		} else {
 			//race condition
-			var doc entity.Doc
+			var doc entity.AddRemoveDocItem
 			err := c.ShouldBindJSON(&doc)
 			if err != nil {
 				c.JSON(500, gin.H{
@@ -235,7 +235,7 @@ func main() {
 				"message": err.Error(),
 			})
 		} else {
-			var doc entity.DocDraft
+			var doc entity.AddRemoveDocDraftItem
 			err := c.ShouldBindJSON(&doc)
 			if err != nil {
 				c.JSON(500, gin.H{
