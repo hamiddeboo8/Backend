@@ -1,6 +1,6 @@
 package entity
 
-type AddRemoveDocDraftItem struct {
+/*type AddRemoveDocDraftItem struct {
 	ID uint64 `json:"ID"`
 
 	DocNum         int `json:"DocNum" binding:"required"`
@@ -21,4 +21,4 @@ type AddRemoveDocDraftItem struct {
 	RemoveDocItems []uint64       `json:"RemoveDocItems"`
 
 	IsChanging bool `json:"-" gorm:"type:boolean"`
-}
+}*/

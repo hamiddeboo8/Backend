@@ -3,7 +3,7 @@ package service
 import (
 	"AccountingDoc/Gin-Server/entity"
 	"errors"
-	"strconv"
+	"fmt"
 
 	ptime "github.com/yaa110/go-persian-calendar"
 	"gorm.io/driver/postgres"
@@ -18,13 +18,15 @@ type DocService interface {
 	FindByID(id uint64) (entity.Doc, error)
 	ChangeState(id uint64) error
 	CanEdit(id uint64) error
+	InitialCreate() (entity.Doc, error)
+	ChangeIsChange(id uint64) error
 
-	FindDraftByID(id uint64) (entity.DocDraft, error)
+	/*FindDraftByID(id uint64) (entity.DocDraft, error)
 	CanEditDraft(id uint64) error
 	CreateDraftDoc() (entity.DocDraft, error)
 	FindDrafts() ([]entity.DocDraft, error)
 	SaveDraftByID(uint64, entity.AddRemoveDocDraftItem) error
-	RemoveDraft(id uint64) error
+	RemoveDraft(id uint64) error*/
 
 	FindMoeins() ([]entity.Moein, error)
 	FindTafsilis() ([]entity.Tafsili, error)
@@ -45,23 +47,23 @@ func NewDbConnection() *gorm.DB {
 		panic("Error in openning Database")
 	}
 
-	db.AutoMigrate(&entity.GlobalVars{}, &entity.Doc{}, &entity.DocDraft{}, &entity.DocItem{}, &entity.DocItemDraft{})
+	db.AutoMigrate(&entity.GlobalVars{}, &entity.Doc{}, &entity.DocItem{} /*, &entity.DocDraft{}, &entity.DocItemDraft{}*/)
 
-	if db.Migrator().HasTable(&entity.GlobalVars{}) {
+	/*if db.Migrator().HasTable(&entity.GlobalVars{}) {
 		db.Migrator().DropTable(&entity.GlobalVars{})
 	}
 	if db.Migrator().HasTable(&entity.Doc{}) {
 		db.Migrator().DropTable(&entity.Doc{})
 	}
-	if db.Migrator().HasTable(&entity.DocDraft{}) {
-		db.Migrator().DropTable(&entity.DocDraft{})
-	}
 	if db.Migrator().HasTable(&entity.DocItem{}) {
 		db.Migrator().DropTable(&entity.DocItem{})
+	}*/
+	/*if db.Migrator().HasTable(&entity.DocDraft{}) {
+		db.Migrator().DropTable(&entity.DocDraft{})
 	}
 	if db.Migrator().HasTable(&entity.DocItemDraft{}) {
 		db.Migrator().DropTable(&entity.DocItemDraft{})
-	}
+	}*/
 
 	if !db.Migrator().HasTable(&entity.Moein{}) {
 		db.Migrator().CreateTable(&entity.Moein{})
@@ -79,15 +81,15 @@ func NewDbConnection() *gorm.DB {
 	if !db.Migrator().HasTable(&entity.Doc{}) {
 		db.Migrator().CreateTable(&entity.Doc{})
 	}
-	if !db.Migrator().HasTable(&entity.DocDraft{}) {
-		db.Migrator().CreateTable(&entity.DocDraft{})
-	}
 	if !db.Migrator().HasTable(&entity.DocItem{}) {
 		db.Migrator().CreateTable(&entity.DocItem{})
 	}
+	/*if !db.Migrator().HasTable(&entity.DocDraft{}) {
+		db.Migrator().CreateTable(&entity.DocDraft{})
+	}
 	if !db.Migrator().HasTable(&entity.DocItemDraft{}) {
 		db.Migrator().CreateTable(&entity.DocItemDraft{})
-	}
+	}*/
 
 	return db
 }
@@ -106,9 +108,11 @@ func (service *docService) DoInTransaction(fn TransactionFunc) error {
 		}
 		return err
 	}
+	fmt.Println("Mireser")
 	if err = tx.Commit().Error; err != nil {
 		return err
 	}
+	fmt.Println("Nemirese")
 
 	return nil
 }
@@ -146,7 +150,7 @@ func (service *docService) FindByID(id uint64) (entity.Doc, error) {
 	if res.Error != nil {
 		return entity.Doc{}, res.Error
 	}
-	return doc, errors.New("Doc with id " + strconv.FormatUint(id, 10) + " Not Found")
+	return doc, nil
 
 	/*var x []entity.DocItem
 	db.connection.Where("doc_refer = ?", id).Preload("Moein").Preload("Tafsili").Find(&x)
@@ -154,31 +158,8 @@ func (service *docService) FindByID(id uint64) (entity.Doc, error) {
 
 }
 
-//doubt about preload
-func (service *docService) FindDrafts() ([]entity.DocDraft, error) {
-	var docs []entity.DocDraft
-	res := service.db.Set("gorm:auto_preload", true).Find(&docs)
-	if res.Error != nil {
-		return docs, res.Error
-	}
-	return docs, nil
-}
-
-func (service *docService) FindDraftByID(id uint64) (entity.DocDraft, error) {
-	var doc entity.DocDraft
-	res := service.db.Preload("DocItems").Preload("DocItems.Moein").Preload("DocItems.Tafsili").First(&doc, id)
-	if res.Error != nil {
-		return entity.DocDraft{}, res.Error
-	}
-	return doc, errors.New("Doc with id " + strconv.FormatUint(id, 10) + " Not Found")
-
-	/*var x []entity.DocItemDraft
-	db.connection.Where("doc_draft_refer = ?", id).Preload("Moein").Preload("Tafsili").Find(&x)
-	doc.DocItems = x*/
-}
-
-func (service *docService) CreateDraftDoc() (entity.DocDraft, error) {
-	var doc entity.DocDraft
+func (service *docService) InitialCreate() (entity.Doc, error) {
+	var doc entity.Doc
 	pt := ptime.Now()
 	doc.Year = pt.Year()
 	doc.Month = int(pt.Month())
@@ -186,39 +167,49 @@ func (service *docService) CreateDraftDoc() (entity.DocDraft, error) {
 	doc.Hour = pt.Hour()
 	doc.Minute = pt.Minute()
 	doc.Second = pt.Second()
-	doc.AtfNum = -1
-	doc.DocNum = 0
-	doc.DailyNum = -1
+	doc.AtfNum = 0
+	doc.DocNum = 1
+	doc.DailyNum = 0
 	doc.MinorNum = ""
 	doc.Desc = ""
 	doc.State = "موقت"
 	doc.DocType = "عمومی"
 	doc.EmitSystem = "سیستم حسابداری"
-	doc.DocItems = make([]entity.DocItemDraft, 0)
-	res := service.db.Create(&doc)
-	if res.Error != nil {
-		return entity.DocDraft{}, res.Error
-	}
+	doc.DocItems = make([]entity.DocItem, 0)
 	return doc, nil
 }
 
 //preload???
 func (service *docService) Save(doc entity.Doc) error {
-	var docDraft entity.DocDraft
 	err := service.DoInTransaction(func(tx *gorm.DB) error {
-		res := tx.Clauses(clause.Locking{Strength: "UPDATE"}).First(&docDraft, doc.ID)
+		/*res := tx.Clauses(clause.Locking{Strength: "UPDATE"}).First(&docDraft, doc.ID)
 		if res.Error != nil {
 			return res.Error
 		}
 		res = tx.Delete(&entity.DocDraft{}, doc.ID)
 		if res.Error != nil {
 			return res.Error
+		}*/
+		var glb entity.GlobalVars
+		res := tx.Clauses(clause.Locking{Strength: "NO KEY UPDATE"}).First(&glb)
+		if res.Error != nil {
+			return res.Error
 		}
+		doc.AtfNum = glb.AtfNumGlobal
+		doc.DailyNum = glb.TodayCount
 		res = tx.Model(&entity.GlobalVars{}).Where("1 = 1").Updates(map[string]interface{}{"today_count": gorm.Expr("today_count + ?", 1), "atf_num_global": gorm.Expr("atf_num_global + ?", 1)})
 		if res.Error != nil {
 			return res.Error
 		}
-		res = tx.Create(&doc)
+		res = tx.Omit("DocItems").Create(&doc)
+		if res.Error != nil {
+			return res.Error
+		}
+		for i := range doc.DocItems {
+			doc.DocItems[i].DocRefer = doc.ID
+			doc.DocItems[i].ID = 0
+		}
+		res = tx.Create(&doc.DocItems)
 		return res.Error
 	})
 	return err
@@ -246,14 +237,31 @@ func (service *docService) SaveByID(id uint64, doc entity.AddRemoveDocItem) erro
 		if res.Error != nil {
 			return res.Error
 		}
-		for i, _ := range doc.AddDocItems {
+		for i := range doc.AddDocItems {
 			doc.AddDocItems[i].DocRefer = id
+			doc.AddDocItems[i].ID = 0
 		}
-		res = tx.Model(&entity.DocItem{}).Create(doc.AddDocItems)
-		if res.Error != nil {
-			return res.Error
+		if len(doc.AddDocItems) > 0 {
+			res = tx.Create(&doc.AddDocItems)
+			if res.Error != nil {
+				return res.Error
+			}
 		}
-		res = tx.Delete(&entity.DocItem{}, doc.RemoveDocItems)
+		if len(doc.RemoveDocItems) > 0 {
+			res = tx.Delete(&entity.DocItem{}, doc.RemoveDocItems)
+			if res.Error != nil {
+				return res.Error
+			}
+		}
+		res = tx.Model(&entity.Doc{}).Where("id = ?", id).Update("is_changing", false)
+		return res.Error
+	})
+	return err
+}
+
+func (service *docService) ChangeIsChange(id uint64) error {
+	err := service.DoInTransaction(func(tx *gorm.DB) error {
+		res := tx.Model(&entity.Doc{}).Where("id = ?", id).Update("is_changing", false)
 		return res.Error
 	})
 	return err
@@ -276,26 +284,43 @@ func (service *docService) CanEdit(id uint64) error {
 		var doc entity.Doc
 		res := tx.Clauses(clause.Locking{Strength: "NO KEY UPDATE"}).Model(&entity.Doc{}).Where("id = ?", id).First(&doc)
 		if res.Error != nil {
+			fmt.Println("XXX")
 			return res.Error
 		}
 		if doc.State == "دائمی" {
 			return errors.New("doc is permanent")
 		}
+		fmt.Println(doc.IsChanging)
 		if doc.IsChanging {
+			fmt.Println("miad")
 			return errors.New("sb else is changing")
 		}
 		res = tx.Model(&entity.Doc{}).Where("id = ?", id).Update("is_changing", true)
+		fmt.Println("errr: ", res.Error)
 		return res.Error
 	})
 	return err
 }
 
+func (service *docService) FindMoeins() ([]entity.Moein, error) {
+	var codes []entity.Moein
+	res := service.db.Find(&codes)
+	return codes, res.Error
+}
+func (service *docService) FindTafsilis() ([]entity.Tafsili, error) {
+	var codes []entity.Tafsili
+	res := service.db.Find(&codes)
+	return codes, res.Error
+}
+
+/*
 //not implement yet
 func (service *docService) CanEditDraft(id uint64) error {
 	//multi client
 	return nil
 }
-
+*/
+/*
 func (service *docService) SaveDraftByID(id uint64, doc entity.AddRemoveDocDraftItem) error {
 	err := service.DoInTransaction(func(tx *gorm.DB) error {
 		res := tx.Model(&entity.DocDraft{}).Where("id = ?", id).Updates(map[string]interface{}{
@@ -329,7 +354,9 @@ func (service *docService) SaveDraftByID(id uint64, doc entity.AddRemoveDocDraft
 	})
 	return err
 }
+*/
 
+/*
 //lock? no i guess
 func (service *docService) RemoveDraft(id uint64) error {
 	res := service.db.Delete(&entity.DocDraft{}, id)
@@ -338,14 +365,57 @@ func (service *docService) RemoveDraft(id uint64) error {
 	}
 	return nil
 }
+*/
 
-func (service *docService) FindMoeins() ([]entity.Moein, error) {
-	var codes []entity.Moein
-	res := service.db.Find(&codes)
-	return codes, res.Error
+/*
+//doubt about preload
+func (service *docService) FindDrafts() ([]entity.DocDraft, error) {
+	var docs []entity.DocDraft
+	res := service.db.Set("gorm:auto_preload", true).Find(&docs)
+	if res.Error != nil {
+		return docs, res.Error
+	}
+	return docs, nil
 }
-func (service *docService) FindTafsilis() ([]entity.Tafsili, error) {
-	var codes []entity.Tafsili
-	res := service.db.Find(&codes)
-	return codes, res.Error
+*/
+/*
+func (service *docService) FindDraftByID(id uint64) (entity.DocDraft, error) {
+	var doc entity.DocDraft
+	res := service.db.Preload("DocItems").Preload("DocItems.Moein").Preload("DocItems.Tafsili").First(&doc, id)
+	if res.Error != nil {
+		return entity.DocDraft{}, res.Error
+	}
+	return doc, errors.New("Doc with id " + strconv.FormatUint(id, 10) + " Not Found")
+
+	//var x []entity.DocItemDraft
+	//db.connection.Where("doc_draft_refer = ?", id).Preload("Moein").Preload("Tafsili").Find(&x)
+	//doc.DocItems = x
 }
+*/
+
+/*
+func (service *docService) CreateDraftDoc() (entity.DocDraft, error) {
+	var doc entity.DocDraft
+	pt := ptime.Now()
+	doc.Year = pt.Year()
+	doc.Month = int(pt.Month())
+	doc.Day = pt.Day()
+	doc.Hour = pt.Hour()
+	doc.Minute = pt.Minute()
+	doc.Second = pt.Second()
+	doc.AtfNum = -1
+	doc.DocNum = 0
+	doc.DailyNum = -1
+	doc.MinorNum = ""
+	doc.Desc = ""
+	doc.State = "موقت"
+	doc.DocType = "عمومی"
+	doc.EmitSystem = "سیستم حسابداری"
+	doc.DocItems = make([]entity.DocItemDraft, 0)
+	res := service.db.Create(&doc)
+	if res.Error != nil {
+		return entity.DocDraft{}, res.Error
+	}
+	return doc, nil
+}
+*/

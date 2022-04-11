@@ -1,5 +1,6 @@
 package entity
 
+/*
 import (
 	"time"
 )
@@ -27,3 +28,4 @@ type DocDraft struct {
 
 	IsChanging bool `json:"-" gorm:"type:boolean"`
 }
+*/

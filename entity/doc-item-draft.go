@@ -1,5 +1,6 @@
 package entity
 
+/*
 import (
 	"time"
 )
@@ -25,3 +26,4 @@ type DocItemDraft struct {
 
 	DocDraftRefer uint64 `json:"-" gorm:"primaryKey"`
 }
+*/

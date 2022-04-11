@@ -155,7 +155,7 @@ func main() {
 			})
 		} else {
 			err := DocService.CanEdit(id)
-			if err != nil {
+			if err == nil {
 				c.JSON(200, gin.H{
 					"message": "Can be edited",
 				})
@@ -167,7 +167,39 @@ func main() {
 		}
 	})
 
-	r.GET("/docs/drafts/:id", func(c *gin.Context) {
+	r.GET("/docs/create", func(c *gin.Context) {
+		//because some initializes things like date or (if implement => atf and daily number)
+		res, err := DocService.InitialCreate()
+		if err == nil {
+			c.JSON(200, res)
+		} else {
+			c.JSON(500, gin.H{
+				"message": err.Error(),
+			})
+		}
+	})
+
+	r.PUT("/docs/changing/:id", func(c *gin.Context) {
+		id, err := strconv.ParseUint(c.Param("id"), 10, 64)
+		if err != nil {
+			c.JSON(500, gin.H{
+				"message": err.Error(),
+			})
+		} else {
+			err := DocService.ChangeIsChange(id)
+			if err == nil {
+				c.JSON(200, gin.H{
+					"message": "Successfully Exit",
+				})
+			} else {
+				c.JSON(500, gin.H{
+					"message": err.Error(),
+				})
+			}
+		}
+	})
+
+	/*r.GET("/docs/drafts/:id", func(c *gin.Context) {
 		id, err := strconv.ParseUint(c.Param("id"), 10, 64)
 		if err != nil {
 			c.JSON(500, gin.H{
@@ -183,9 +215,9 @@ func main() {
 				})
 			}
 		}
-	})
+	})*/
 
-	r.GET("/docs/drafts/edit/:id", func(c *gin.Context) {
+	/*r.GET("/docs/drafts/edit/:id", func(c *gin.Context) {
 		id, err := strconv.ParseUint(c.Param("id"), 10, 64)
 		if err != nil {
 			c.JSON(500, gin.H{
@@ -203,9 +235,9 @@ func main() {
 				})
 			}
 		}
-	})
+	})*/
 
-	r.GET("/docs/drafts", func(c *gin.Context) {
+	/*r.GET("/docs/drafts", func(c *gin.Context) {
 		res, err := DocService.FindDrafts()
 		if err == nil {
 			c.JSON(200, res)
@@ -214,9 +246,9 @@ func main() {
 				"message": err.Error(),
 			})
 		}
-	})
+	})*/
 
-	r.GET("/docs/drafts/create", func(c *gin.Context) {
+	/*r.GET("/docs/drafts/create", func(c *gin.Context) {
 		//because some initializes things like date or (if implement => atf and daily number)
 		res, err := DocService.CreateDraftDoc()
 		if err == nil {
@@ -226,9 +258,9 @@ func main() {
 				"message": err.Error(),
 			})
 		}
-	})
+	})*/
 
-	r.PUT("/docs/drafts/:id", func(c *gin.Context) {
+	/*r.PUT("/docs/drafts/:id", func(c *gin.Context) {
 		id, err := strconv.ParseUint(c.Param("id"), 10, 64)
 		if err != nil {
 			c.JSON(500, gin.H{
@@ -259,9 +291,9 @@ func main() {
 				}
 			}
 		}
-	})
+	})*/
 
-	r.PUT("/docs/drafts/delete/:id", func(c *gin.Context) {
+	/*r.PUT("/docs/drafts/delete/:id", func(c *gin.Context) {
 		id, err := strconv.ParseUint(c.Param("id"), 10, 64)
 		if err != nil {
 			c.JSON(500, gin.H{
@@ -279,7 +311,7 @@ func main() {
 				})
 			}
 		}
-	})
+	})*/
 
 	r.GET("/docs/moeins", func(c *gin.Context) {
 		res, err := DocService.FindMoeins()
