@@ -415,12 +415,12 @@ func (service *docService) DeleteByID(id uint64) error {
 
 func (service *docService) FindMoeins() ([]entity.Moein, error) {
 	var codes []entity.Moein
-	res := service.db.Find(&codes)
+	res := service.db.Order("id asc").Find(&codes)
 	return codes, res.Error
 }
 func (service *docService) FindTafsilis() ([]entity.Tafsili, error) {
 	var codes []entity.Tafsili
-	res := service.db.Find(&codes)
+	res := service.db.Order("id asc").Find(&codes)
 	return codes, res.Error
 }
 func (service *docService) ValidateDocItem(docItem entity.DocItem) error {
@@ -478,7 +478,7 @@ func (service *docService) ValidateDocItem(docItem entity.DocItem) error {
 
 func (service *docService) FilterByMinorNum(minorNum string) ([]entity.Doc, error) {
 	var docs []entity.Doc
-	res := service.db.Model(&entity.Doc{}).Where("minor_num = ?", minorNum).Omit("DocItems").Find(&docs)
+	res := service.db.Model(&entity.Doc{}).Where("minor_num = ?", minorNum).Omit("DocItems").Order("id asc").Find(&docs)
 	if res.Error != nil {
 		return docs, res.Error
 	}

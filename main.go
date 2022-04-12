@@ -167,7 +167,7 @@ func main() {
 		}
 	})
 
-	r.GET("/docs/create", func(c *gin.Context) {
+	/*r.GET("/docs/create", func(c *gin.Context) {
 		//because some initializes things like date or (if implement => atf and daily number)
 		res, err := DocService.InitialCreate()
 		if err == nil {
@@ -177,7 +177,7 @@ func main() {
 				"message": err.Error(),
 			})
 		}
-	})
+	})*/
 
 	r.PUT("/docs/changing/:id", func(c *gin.Context) {
 		id, err := strconv.ParseUint(c.Param("id"), 10, 64)
