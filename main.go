@@ -238,6 +238,23 @@ func main() {
 		}
 	})
 
+	r.GET("/docs/filter/minor_num/:minor", func(c *gin.Context) {
+		minor_num := c.Param("minor")
+		res, err := DocService.FilterByMinorNum(minor_num)
+		if err != nil {
+			c.JSON(500, gin.H{
+				"message": err.Error(),
+			})
+		} else {
+			c.JSON(200, res)
+		}
+	})
+	r.GET("/docs/filter/minor_num/", func(c *gin.Context) {
+		c.JSON(500, gin.H{
+			"message": "minor num field must not be empty",
+		})
+	})
+
 	/*r.GET("/docs/drafts/:id", func(c *gin.Context) {
 		id, err := strconv.ParseUint(c.Param("id"), 10, 64)
 		if err != nil {

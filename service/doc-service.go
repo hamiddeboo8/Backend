@@ -21,6 +21,7 @@ type DocService interface {
 	ChangeIsChange(id uint64) error
 	DeleteByID(id uint64) error
 	ValidateDocItem(entity.DocItem) error
+	FilterByMinorNum(string) ([]entity.Doc, error)
 
 	/*FindDraftByID(id uint64) (entity.DocDraft, error)
 	CanEditDraft(id uint64) error
@@ -148,7 +149,7 @@ func New(database *gorm.DB) DocService {
 
 func (service *docService) FindAll() ([]entity.Doc, error) {
 	var docs []entity.Doc
-	res := service.db.Set("gorm:auto_preload", true).Find(&docs)
+	res := service.db.Omit("DocItems").Find(&docs)
 	if res.Error != nil {
 		return docs, res.Error
 	}
@@ -461,6 +462,15 @@ func (service *docService) ValidateDocItem(docItem entity.DocItem) error {
 		return nil
 	})
 	return err
+}
+
+func (service *docService) FilterByMinorNum(minorNum string) ([]entity.Doc, error) {
+	var docs []entity.Doc
+	res := service.db.Model(&entity.Doc{}).Where("minor_num = ?", minorNum).Omit("DocItems").Find(&docs)
+	if res.Error != nil {
+		return docs, res.Error
+	}
+	return docs, nil
 }
 
 /*

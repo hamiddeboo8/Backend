@@ -1,0 +1,1 @@
+/docs/filter/minor_num/:minor
