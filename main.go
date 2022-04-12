@@ -199,6 +199,45 @@ func main() {
 		}
 	})
 
+	r.DELETE("/docs/:id", func(c *gin.Context) {
+		id, err := strconv.ParseUint(c.Param("id"), 10, 64)
+		if err != nil {
+			c.JSON(500, gin.H{
+				"message": err.Error(),
+			})
+		} else {
+			err := DocService.DeleteByID(id)
+			if err == nil {
+				c.JSON(200, gin.H{
+					"message": "Successfully Delete",
+				})
+			} else {
+				c.JSON(500, gin.H{
+					"message": err.Error(),
+				})
+			}
+		}
+	})
+
+	r.POST("/docs/validate_doc_item", func(c *gin.Context) {
+		var docItem entity.DocItem
+		err := c.ShouldBindJSON(&docItem)
+		if err != nil {
+			c.JSON(500, gin.H{
+				"message": err.Error(),
+			})
+		} else {
+			err = DocService.ValidateDocItem(docItem)
+			if err != nil {
+				c.JSON(500, gin.H{
+					"message": err.Error(),
+				})
+			} else {
+				c.JSON(200, entity.Codes{Moein: docItem.Moein, Tafsili: docItem.Tafsili})
+			}
+		}
+	})
+
 	/*r.GET("/docs/drafts/:id", func(c *gin.Context) {
 		id, err := strconv.ParseUint(c.Param("id"), 10, 64)
 		if err != nil {
