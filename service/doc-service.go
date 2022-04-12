@@ -4,7 +4,6 @@ import (
 	"AccountingDoc/Gin-Server/entity"
 	"errors"
 
-	ptime "github.com/yaa110/go-persian-calendar"
 	"gorm.io/driver/postgres"
 	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
@@ -17,7 +16,7 @@ type DocService interface {
 	FindByID(id uint64) (entity.Doc, error)
 	ChangeState(id uint64) error
 	CanEdit(id uint64) error
-	InitialCreate() (entity.Doc, error)
+	//InitialCreate() (entity.Doc, error)
 	ChangeIsChange(id uint64) error
 	DeleteByID(id uint64) error
 	ValidateDocItem(entity.DocItem) error
@@ -149,7 +148,7 @@ func New(database *gorm.DB) DocService {
 
 func (service *docService) FindAll() ([]entity.Doc, error) {
 	var docs []entity.Doc
-	res := service.db.Omit("DocItems").Find(&docs)
+	res := service.db.Model(&entity.Doc{}).Omit("DocItems").Order("id asc").Find(&docs)
 	if res.Error != nil {
 		return docs, res.Error
 	}
@@ -170,7 +169,7 @@ func (service *docService) FindByID(id uint64) (entity.Doc, error) {
 
 }
 
-func (service *docService) InitialCreate() (entity.Doc, error) {
+/*func (service *docService) InitialCreate() (entity.Doc, error) {
 	var doc entity.Doc
 	pt := ptime.Now()
 	doc.Year = pt.Year()
@@ -189,7 +188,7 @@ func (service *docService) InitialCreate() (entity.Doc, error) {
 	doc.EmitSystem = "سیستم حسابداری"
 	doc.DocItems = make([]entity.DocItem, 0)
 	return doc, nil
-}
+}*/
 
 //preload???
 func (service *docService) Save(doc entity.Doc) error {
@@ -306,6 +305,9 @@ func (service *docService) SaveByID(id uint64, doc entity.AddRemoveDocItem) erro
 			doc.AddDocItems[i].DocRefer = id
 			doc.AddDocItems[i].ID = 0
 		}
+		for i := range doc.EditDocItems {
+			doc.EditDocItems[i].DocRefer = id
+		}
 		if len(doc.AddDocItems) > 0 {
 			res = tx.Create(&doc.AddDocItems)
 			if res.Error != nil {
@@ -318,6 +320,16 @@ func (service *docService) SaveByID(id uint64, doc entity.AddRemoveDocItem) erro
 				return res.Error
 			}
 		}
+		res = tx.Save(&doc.EditDocItems)
+		if res.Error != nil {
+			return res.Error
+		}
+		// for _, item := range doc.EditDocItems {
+		// 	res = tx.Save(&item)
+		// 	if res.Error != nil {
+		// 		return res.Error
+		// 	}
+		// }
 		return nil
 	})
 	return err
