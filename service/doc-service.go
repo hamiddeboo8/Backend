@@ -21,6 +21,7 @@ type DocService interface {
 	DeleteByID(id uint64) error
 	ValidateDocItem(entity.DocItem) error
 	FilterByMinorNum(string) ([]entity.Doc, error)
+	Numbering() error
 
 	/*FindDraftByID(id uint64) (entity.DocDraft, error)
 	CanEditDraft(id uint64) error
@@ -483,6 +484,22 @@ func (service *docService) FilterByMinorNum(minorNum string) ([]entity.Doc, erro
 		return docs, res.Error
 	}
 	return docs, nil
+}
+
+func (service *docService) Numbering() error {
+	err := service.DoInTransaction(func(tx *gorm.DB) error {
+		var docs []entity.Doc
+		res := tx.Clauses(clause.Locking{Strength: "NO KEY UPDATE"}).Model(&entity.Doc{}).Omit("DocItems").Order("year asc, month asc, day asc, hour asc, minute asc, second asc, atf_num asc").Find(&docs)
+		if res.Error != nil {
+			return res.Error
+		}
+		for i := range docs {
+			docs[i].DocNum = i + 1
+		}
+		res = tx.Save(&docs)
+		return res.Error
+	})
+	return err
 }
 
 /*

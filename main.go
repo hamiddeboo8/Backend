@@ -255,6 +255,19 @@ func main() {
 		})
 	})
 
+	r.GET("/docs/numbering", func(c *gin.Context) {
+		err := DocService.Numbering()
+		if err == nil {
+			c.JSON(200, gin.H{
+				"message": "Successfully Numbered",
+			})
+		} else {
+			c.JSON(500, gin.H{
+				"message": err.Error(),
+			})
+		}
+	})
+
 	/*r.GET("/docs/drafts/:id", func(c *gin.Context) {
 		id, err := strconv.ParseUint(c.Param("id"), 10, 64)
 		if err != nil {

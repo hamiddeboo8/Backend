@@ -9,7 +9,7 @@ type Doc struct {
 	CreatedAt time.Time `json:"-" gorm:"default.CURRENT_TIMESTAMP"`
 	UpdatedAt time.Time `json:"-" gorm:"default.CURRENT_TIMESTAMP"`
 
-	DocNum     int       `json:"DocNum" gorm:"type:int;UNIQUE"`
+	DocNum     int       `json:"DocNum" gorm:"type:int"`
 	Year       int       `gorm:"type:int"`
 	Month      int       `gorm:"type:int;check:Month<=12 and Month>=1"`
 	Day        int       `gorm:"type:int;check:Day<=31 and Day>=1"`
