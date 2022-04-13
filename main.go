@@ -3,6 +3,7 @@ package main
 import (
 	"AccountingDoc/Gin-Server/entity"
 	"AccountingDoc/Gin-Server/service"
+	"log"
 	"strconv"
 
 	"fmt"
@@ -34,16 +35,7 @@ func CORS(c *gin.Context) {
 		c.AbortWithStatus(200)
 	}
 }
-
-var (
-	db         *gorm.DB           = service.NewDbConnection()
-	DocService service.DocService = service.New(db)
-)
-
-func main() {
-
-	defer DocService.CloseDB()
-
+func Setup(DocService service.DocService) *gin.Engine {
 	r := gin.Default()
 
 	r.Use(CORS)
@@ -57,7 +49,6 @@ func main() {
 			})
 		} else {
 			err = DocService.Save(doc)
-			//res, err := DocController.Save(c)
 			if err == nil {
 				c.JSON(200, gin.H{
 					"message": "Successfully Saved",
@@ -167,18 +158,6 @@ func main() {
 		}
 	})
 
-	/*r.GET("/docs/create", func(c *gin.Context) {
-		//because some initializes things like date or (if implement => atf and daily number)
-		res, err := DocService.InitialCreate()
-		if err == nil {
-			c.JSON(200, res)
-		} else {
-			c.JSON(500, gin.H{
-				"message": err.Error(),
-			})
-		}
-	})*/
-
 	r.PUT("/docs/changing/:id", func(c *gin.Context) {
 		id, err := strconv.ParseUint(c.Param("id"), 10, 64)
 		if err != nil {
@@ -267,6 +246,54 @@ func main() {
 			})
 		}
 	})
+
+	r.GET("/docs/moeins", func(c *gin.Context) {
+		res, err := DocService.FindMoeins()
+		if err == nil {
+			c.JSON(200, res)
+		} else {
+			c.JSON(500, gin.H{
+				"message": err.Error(),
+			})
+		}
+	})
+
+	r.GET("/docs/tafsilis", func(c *gin.Context) {
+		res, err := DocService.FindTafsilis()
+		if err == nil {
+			c.JSON(200, res)
+		} else {
+			c.JSON(500, gin.H{
+				"message": err.Error(),
+			})
+		}
+	})
+
+	return r
+}
+
+func main() {
+	var (
+		db         *gorm.DB           = service.NewDbConnection()
+		DocService service.DocService = service.New(db)
+	)
+	defer DocService.CloseDB()
+	r := Setup(DocService)
+	if err := r.Run(":5710"); err != nil {
+		log.Fatal(err)
+	}
+
+	/*r.GET("/docs/create", func(c *gin.Context) {
+		//because some initializes things like date or (if implement => atf and daily number)
+		res, err := DocService.InitialCreate()
+		if err == nil {
+			c.JSON(200, res)
+		} else {
+			c.JSON(500, gin.H{
+				"message": err.Error(),
+			})
+		}
+	})*/
 
 	/*r.GET("/docs/drafts/:id", func(c *gin.Context) {
 		id, err := strconv.ParseUint(c.Param("id"), 10, 64)
@@ -381,28 +408,4 @@ func main() {
 			}
 		}
 	})*/
-
-	r.GET("/docs/moeins", func(c *gin.Context) {
-		res, err := DocService.FindMoeins()
-		if err == nil {
-			c.JSON(200, res)
-		} else {
-			c.JSON(500, gin.H{
-				"message": err.Error(),
-			})
-		}
-	})
-
-	r.GET("/docs/tafsilis", func(c *gin.Context) {
-		res, err := DocService.FindTafsilis()
-		if err == nil {
-			c.JSON(200, res)
-		} else {
-			c.JSON(500, gin.H{
-				"message": err.Error(),
-			})
-		}
-	})
-
-	r.Run(":5710")
 }

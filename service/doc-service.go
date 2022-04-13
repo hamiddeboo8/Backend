@@ -34,6 +34,8 @@ type DocService interface {
 	FindTafsilis() ([]entity.Tafsili, error)
 
 	CloseDB() error
+
+	GetDB() *gorm.DB
 }
 
 type docService struct {
@@ -61,7 +63,7 @@ func NewDbConnection() *gorm.DB {
 		panic("Error in openning Database")
 	}
 
-	db.AutoMigrate(&entity.GlobalVars{}, &entity.Doc{}, &entity.DocItem{} /*, &entity.DocDraft{}, &entity.DocItemDraft{}*/)
+	db.AutoMigrate(&entity.GlobalVars{}, &entity.Doc{}, &entity.DocItem{})
 
 	/*if db.Migrator().HasTable(&entity.GlobalVars{}) {
 		db.Migrator().DropTable(&entity.GlobalVars{})
@@ -71,12 +73,6 @@ func NewDbConnection() *gorm.DB {
 	}
 	if db.Migrator().HasTable(&entity.DocItem{}) {
 		db.Migrator().DropTable(&entity.DocItem{})
-	}*/
-	/*if db.Migrator().HasTable(&entity.DocDraft{}) {
-		db.Migrator().DropTable(&entity.DocDraft{})
-	}
-	if db.Migrator().HasTable(&entity.DocItemDraft{}) {
-		db.Migrator().DropTable(&entity.DocItemDraft{})
 	}*/
 
 	if !db.Migrator().HasTable(&entity.Moein{}) {
@@ -98,14 +94,12 @@ func NewDbConnection() *gorm.DB {
 	if !db.Migrator().HasTable(&entity.DocItem{}) {
 		db.Migrator().CreateTable(&entity.DocItem{})
 	}
-	/*if !db.Migrator().HasTable(&entity.DocDraft{}) {
-		db.Migrator().CreateTable(&entity.DocDraft{})
-	}
-	if !db.Migrator().HasTable(&entity.DocItemDraft{}) {
-		db.Migrator().CreateTable(&entity.DocItemDraft{})
-	}*/
 
 	return db
+}
+
+func (service *docService) GetDB() *gorm.DB {
+	return service.db
 }
 
 //difference of doing everything on DiInTransaction
@@ -163,45 +157,11 @@ func (service *docService) FindByID(id uint64) (entity.Doc, error) {
 		return entity.Doc{}, res.Error
 	}
 	return doc, nil
-
-	/*var x []entity.DocItem
-	db.connection.Where("doc_refer = ?", id).Preload("Moein").Preload("Tafsili").Find(&x)
-	doc.DocItems = x*/
-
 }
-
-/*func (service *docService) InitialCreate() (entity.Doc, error) {
-	var doc entity.Doc
-	pt := ptime.Now()
-	doc.Year = pt.Year()
-	doc.Month = int(pt.Month())
-	doc.Day = pt.Day()
-	doc.Hour = pt.Hour()
-	doc.Minute = pt.Minute()
-	doc.Second = pt.Second()
-	doc.AtfNum = 0
-	doc.DocNum = 1
-	doc.DailyNum = 0
-	doc.MinorNum = ""
-	doc.Desc = ""
-	doc.State = "موقت"
-	doc.DocType = "عمومی"
-	doc.EmitSystem = "سیستم حسابداری"
-	doc.DocItems = make([]entity.DocItem, 0)
-	return doc, nil
-}*/
 
 //preload???
 func (service *docService) Save(doc entity.Doc) error {
 	err := service.DoInTransaction(func(tx *gorm.DB) error {
-		/*res := tx.Clauses(clause.Locking{Strength: "UPDATE"}).First(&docDraft, doc.ID)
-		if res.Error != nil {
-			return res.Error
-		}
-		res = tx.Delete(&entity.DocDraft{}, doc.ID)
-		if res.Error != nil {
-			return res.Error
-		}*/
 		var glb entity.GlobalVars
 		res := tx.Clauses(clause.Locking{Strength: "NO KEY UPDATE"}).First(&glb)
 		if res.Error != nil {
@@ -325,12 +285,6 @@ func (service *docService) SaveByID(id uint64, doc entity.AddRemoveDocItem) erro
 		if res.Error != nil {
 			return res.Error
 		}
-		// for _, item := range doc.EditDocItems {
-		// 	res = tx.Save(&item)
-		// 	if res.Error != nil {
-		// 		return res.Error
-		// 	}
-		// }
 		return nil
 	})
 	return err
@@ -501,110 +455,3 @@ func (service *docService) Numbering() error {
 	})
 	return err
 }
-
-/*
-//not implement yet
-func (service *docService) CanEditDraft(id uint64) error {
-	//multi client
-	return nil
-}
-*/
-/*
-func (service *docService) SaveDraftByID(id uint64, doc entity.AddRemoveDocDraftItem) error {
-	err := service.DoInTransaction(func(tx *gorm.DB) error {
-		res := tx.Model(&entity.DocDraft{}).Where("id = ?", id).Updates(map[string]interface{}{
-			"doc_num":     doc.DocNum,
-			"year":        doc.Year,
-			"month":       doc.Month,
-			"day":         doc.Day,
-			"hour":        doc.Hour,
-			"minute":      doc.Minute,
-			"second":      doc.Second,
-			"atf_num":     doc.AtfNum,
-			"minor_num":   doc.MinorNum,
-			"desc":        doc.Desc,
-			"state":       doc.State,
-			"daily_num":   doc.DailyNum,
-			"doc_type":    doc.DocType,
-			"emit_system": doc.EmitSystem,
-		})
-		if res.Error != nil {
-			return res.Error
-		}
-		for i, _ := range doc.AddDocItems {
-			doc.AddDocItems[i].DocDraftRefer = id
-		}
-		res = tx.Model(&entity.DocItemDraft{}).Create(doc.AddDocItems)
-		if res.Error != nil {
-			return res.Error
-		}
-		res = tx.Delete(&entity.DocItemDraft{}, doc.RemoveDocItems)
-		return res.Error
-	})
-	return err
-}
-*/
-
-/*
-//lock? no i guess
-func (service *docService) RemoveDraft(id uint64) error {
-	res := service.db.Delete(&entity.DocDraft{}, id)
-	if res.Error != nil {
-		return errors.New("DocDraft with id " + strconv.FormatUint(id, 10) + " Not Found")
-	}
-	return nil
-}
-*/
-
-/*
-//doubt about preload
-func (service *docService) FindDrafts() ([]entity.DocDraft, error) {
-	var docs []entity.DocDraft
-	res := service.db.Set("gorm:auto_preload", true).Find(&docs)
-	if res.Error != nil {
-		return docs, res.Error
-	}
-	return docs, nil
-}
-*/
-/*
-func (service *docService) FindDraftByID(id uint64) (entity.DocDraft, error) {
-	var doc entity.DocDraft
-	res := service.db.Preload("DocItems").Preload("DocItems.Moein").Preload("DocItems.Tafsili").First(&doc, id)
-	if res.Error != nil {
-		return entity.DocDraft{}, res.Error
-	}
-	return doc, errors.New("Doc with id " + strconv.FormatUint(id, 10) + " Not Found")
-
-	//var x []entity.DocItemDraft
-	//db.connection.Where("doc_draft_refer = ?", id).Preload("Moein").Preload("Tafsili").Find(&x)
-	//doc.DocItems = x
-}
-*/
-
-/*
-func (service *docService) CreateDraftDoc() (entity.DocDraft, error) {
-	var doc entity.DocDraft
-	pt := ptime.Now()
-	doc.Year = pt.Year()
-	doc.Month = int(pt.Month())
-	doc.Day = pt.Day()
-	doc.Hour = pt.Hour()
-	doc.Minute = pt.Minute()
-	doc.Second = pt.Second()
-	doc.AtfNum = -1
-	doc.DocNum = 0
-	doc.DailyNum = -1
-	doc.MinorNum = ""
-	doc.Desc = ""
-	doc.State = "موقت"
-	doc.DocType = "عمومی"
-	doc.EmitSystem = "سیستم حسابداری"
-	doc.DocItems = make([]entity.DocItemDraft, 0)
-	res := service.db.Create(&doc)
-	if res.Error != nil {
-		return entity.DocDraft{}, res.Error
-	}
-	return doc, nil
-}
-*/
