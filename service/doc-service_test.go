@@ -23,7 +23,7 @@ type AnsReq struct {
 
 var (
 	mu               sync.RWMutex
-	mu2              sync.RWMutex
+	mu2              []sync.RWMutex
 	atf_num_global   int
 	daily_num_global int
 	moeins           []entity.Moein
@@ -112,7 +112,7 @@ func CreateMoeinTafsili(DocService DocService) ([]entity.Moein, []entity.Tafsili
 
 func Init(DocService DocService, n int) ([]entity.Doc, error) {
 	results := make(chan struct{}, n)
-	var docs []entity.Doc
+	var docs = make([]entity.Doc, n)
 
 	var err error
 	//moeins, tafsilis, err = GetMoeinTafsiliFromDB(DocService)
@@ -413,7 +413,7 @@ func Test_GetDocID(t *testing.T) {
 
 	for i := 0; i < n; i++ {
 		go func() {
-			idx := rand.Intn(len(docs))
+			idx := rand.Intn(n)
 			req, w := SetupGetDoc(DocService, idx+1)
 			if req.Method != http.MethodGet {
 				t.Errorf("HTTP request method error")
@@ -461,6 +461,7 @@ func Test_EditDoc(t *testing.T) {
 
 	editReqs := make([]int, n)
 
+	var docs = make([]entity.Doc, n)
 	rand.Seed(int64(n))
 	docs, err := Init(DocService, n)
 	if err != nil {
@@ -469,20 +470,21 @@ func Test_EditDoc(t *testing.T) {
 
 	t.Log(len(docs))
 	ch := make(chan struct{}, r)
+	mu2 = make([]sync.RWMutex, n)
 
 	for i := 0; i < r; i++ {
 		go func() {
-			idx := rand.Intn(len(docs))
+			idx := rand.Intn(n)
 
 			_, w := SetupCanEditDoc(DocService, idx+1)
 			if w.Code == http.StatusOK {
-				mu2.Lock()
+				mu2[idx].Lock()
 				if editReqs[idx] != 0 {
-					mu2.Unlock()
-					t.Errorf("more than one changing on doc with id %d", idx+1)
+					mu2[idx].Unlock()
+					t.Errorf("more than one changing doc with id %d", idx+1)
 				}
 				editReqs[idx] += 1
-				mu2.Unlock()
+				mu2[idx].Unlock()
 				doc_edit := createRandomEditDoc(docs[idx])
 				_, w := SetupPutDoc(DocService, doc_edit)
 				body, err := ioutil.ReadAll(w.Body)
@@ -508,13 +510,14 @@ func Test_EditDoc(t *testing.T) {
 					}
 				}
 			} else {
-				mu2.Lock()
-				if editReqs[idx] != 0 {
-					mu2.Unlock()
-					t.Errorf("more than one changing on doc with id %d", idx+1)
+				mu2[idx].Lock()
+				if editReqs[idx] != 1 {
+					mu2[idx].Unlock()
+					t.Errorf("problem in changing doc with id %d", idx+1)
+				} else {
+					editReqs[idx] -= 1
+					mu2[idx].Unlock()
 				}
-				editReqs[idx] += 1
-				mu2.Unlock()
 			}
 			ch <- struct{}{}
 		}()
