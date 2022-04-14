@@ -65,7 +65,7 @@ func NewDbConnection() *gorm.DB {
 
 	db.AutoMigrate(&entity.GlobalVars{}, &entity.Doc{}, &entity.DocItem{})
 
-	/*if db.Migrator().HasTable(&entity.GlobalVars{}) {
+	if db.Migrator().HasTable(&entity.GlobalVars{}) {
 		db.Migrator().DropTable(&entity.GlobalVars{})
 	}
 	if db.Migrator().HasTable(&entity.Doc{}) {
@@ -73,7 +73,7 @@ func NewDbConnection() *gorm.DB {
 	}
 	if db.Migrator().HasTable(&entity.DocItem{}) {
 		db.Migrator().DropTable(&entity.DocItem{})
-	}*/
+	}
 
 	if !db.Migrator().HasTable(&entity.Moein{}) {
 		db.Migrator().CreateTable(&entity.Moein{})
@@ -186,6 +186,9 @@ func (service *docService) Save(doc entity.Doc) error {
 		if res.Error != nil {
 			return res.Error
 		}
+		if len(doc.DocItems) == 0 {
+			return errors.New("must have at least one doc item")
+		}
 		for i := range doc.DocItems {
 			doc.DocItems[i].DocRefer = doc.ID
 			doc.DocItems[i].ID = 0
@@ -281,9 +284,11 @@ func (service *docService) SaveByID(id uint64, doc entity.AddRemoveDocItem) erro
 				return res.Error
 			}
 		}
-		res = tx.Save(&doc.EditDocItems)
-		if res.Error != nil {
-			return res.Error
+		if len(doc.EditDocItems) > 0 {
+			res = tx.Save(&doc.EditDocItems)
+			if res.Error != nil {
+				return res.Error
+			}
 		}
 		return nil
 	})
@@ -407,6 +412,11 @@ func (service *docService) ValidateDocItem(docItem entity.DocItem) error {
 			if docItem.Tafsili.CodeVal != "" {
 				return errors.New("moein cannot have any tafsilis")
 			}
+			res = tx.Model(&entity.Tafsili{}).Where("code_val = ?", docItem.Tafsili.CodeVal).First(&tafsili)
+			if res.Error != nil {
+				return res.Error
+			}
+
 		}
 		if moein.CurrPossible {
 			if docItem.CurrPrice == 0 || docItem.Curr == "" || docItem.CurrRate == 0 {

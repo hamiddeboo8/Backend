@@ -1,8 +1,7 @@
-package main
+package service
 
 import (
 	"AccountingDoc/Gin-Server/entity"
-	"AccountingDoc/Gin-Server/service"
 	"bytes"
 	"encoding/json"
 	"io/ioutil"
@@ -24,6 +23,7 @@ type AnsReq struct {
 
 var (
 	mu               sync.RWMutex
+	mu2              sync.RWMutex
 	atf_num_global   int
 	daily_num_global int
 	moeins           []entity.Moein
@@ -72,7 +72,7 @@ func NewDbConnectionTest() *gorm.DB {
 	return db
 }
 
-func GetMoeinTafsiliFromDB(DocService service.DocService) ([]entity.Moein, []entity.Tafsili, error) {
+func GetMoeinTafsiliFromDB(DocService DocService) ([]entity.Moein, []entity.Tafsili, error) {
 	var moeins []entity.Moein
 	var tafsilis []entity.Tafsili
 	res := DocService.GetDB().Find(&moeins)
@@ -85,7 +85,7 @@ func GetMoeinTafsiliFromDB(DocService service.DocService) ([]entity.Moein, []ent
 	}
 	return moeins, tafsilis, nil
 }
-func GetGlobalFromDB(DocService service.DocService) (int, int, error) {
+func GetGlobalFromDB(DocService DocService) (int, int, error) {
 	var glb entity.GlobalVars
 	res := DocService.GetDB().Find(&glb)
 	if res.Error != nil {
@@ -94,7 +94,7 @@ func GetGlobalFromDB(DocService service.DocService) (int, int, error) {
 	return glb.AtfNumGlobal, glb.TodayCount, nil
 }
 
-func CreateMoeinTafsili(DocService service.DocService) ([]entity.Moein, []entity.Tafsili, error) {
+func CreateMoeinTafsili(DocService DocService) ([]entity.Moein, []entity.Tafsili, error) {
 	letterRunes := []rune("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ")
 	numberRunes := []rune("0123456789")
 	moeins := createRandomMoeins(10, numberRunes, letterRunes)
@@ -110,7 +110,7 @@ func CreateMoeinTafsili(DocService service.DocService) ([]entity.Moein, []entity
 	return moeins, tafsilis, nil
 }
 
-func Init(DocService service.DocService, n int) ([]entity.Doc, error) {
+func Init(DocService DocService, n int) ([]entity.Doc, error) {
 	results := make(chan struct{}, n)
 	var docs []entity.Doc
 
@@ -167,7 +167,7 @@ func Test_GetDocs(t *testing.T) {
 	glb.TodayCount = 1
 	db.Create(glb)
 
-	DocService := service.New(db)
+	DocService := New(db)
 	defer DocService.CloseDB()
 	defer ClearTable(&DocService)
 	n := 1000
@@ -210,7 +210,7 @@ func Test_PostDocs(t *testing.T) {
 	glb.TodayCount = 1
 	db.Create(glb)
 
-	DocService := service.New(db)
+	DocService := New(db)
 	defer DocService.CloseDB()
 	defer ClearTable(&DocService)
 	n := 10
@@ -223,7 +223,7 @@ func Test_PostDocs(t *testing.T) {
 
 	for i := 0; i < n; i++ {
 		go func() {
-			doc := createRandomTestDoc(moeins, tafsilis, minorNums, descs, descItems, currs, currRates)
+			doc := createRandomTestDoc()
 			reqBody, err := json.Marshal(doc)
 			if err != nil {
 				t.Errorf(err.Error())
@@ -251,7 +251,7 @@ func Test_PostDocs(t *testing.T) {
 	num_of_items := 10
 	var docItems []entity.DocItem
 	for i := 0; i < num_of_items; i++ {
-		docItems = append(docItems, *createRandomDocItem(moeins, tafsilis, descItems, i+1, currs, currRates))
+		docItems = append(docItems, *createRandomDocItem(i + 1))
 	}
 	doc.DocItems = docItems
 	doc.AtfNum = atf_num_global
@@ -299,7 +299,7 @@ func Test_PostDocs(t *testing.T) {
 	num_of_items = 0
 	docItems = []entity.DocItem{}
 	for i := 0; i < num_of_items; i++ {
-		docItems = append(docItems, *createRandomDocItem(moeins, tafsilis, descItems, i+1, currs, currRates))
+		docItems = append(docItems, *createRandomDocItem(i + 1))
 	}
 	doc.DocItems = docItems
 	doc.AtfNum = atf_num_global
@@ -347,7 +347,7 @@ func Test_PostDocs(t *testing.T) {
 	num_of_items = 10
 	docItems = []entity.DocItem{}
 	for i := 0; i < num_of_items; i++ {
-		docItems = append(docItems, *createRandomDocItem(moeins, tafsilis, descItems, i+1, currs, currRates))
+		docItems = append(docItems, *createRandomDocItem(i + 1))
 	}
 	doc.DocItems = docItems
 	doc.AtfNum = atf_num_global
@@ -399,7 +399,7 @@ func Test_GetDocID(t *testing.T) {
 	glb.TodayCount = 1
 	db.Create(glb)
 
-	DocService := service.New(db)
+	DocService := New(db)
 	defer DocService.CloseDB()
 	defer ClearTable(&DocService)
 	n := 100
@@ -446,11 +446,85 @@ func Test_GetDocID(t *testing.T) {
 	}
 }
 
-//func Test_EditDoc(t *testing.T) {
-//
-//}
+func Test_EditDoc(t *testing.T) {
+	db := NewDbConnectionTest()
+	glb := &entity.GlobalVars{}
+	glb.AtfNumGlobal = 1
+	glb.TodayCount = 1
+	db.Create(glb)
 
-func SetupGetDocs(DocService service.DocService) (*http.Request, *httptest.ResponseRecorder) {
+	DocService := New(db)
+	defer DocService.CloseDB()
+	defer ClearTable(&DocService)
+	n := 10
+	r := 10
+
+	editReqs := make([]int, n)
+
+	rand.Seed(int64(n))
+	docs, err := Init(DocService, n)
+	if err != nil {
+		t.Errorf(err.Error())
+	}
+
+	t.Log(len(docs))
+	ch := make(chan struct{}, r)
+
+	for i := 0; i < r; i++ {
+		go func() {
+			idx := rand.Intn(len(docs))
+
+			_, w := SetupCanEditDoc(DocService, idx+1)
+			if w.Code == http.StatusOK {
+				mu2.Lock()
+				if editReqs[idx] != 0 {
+					mu2.Unlock()
+					t.Errorf("more than one changing on doc with id %d", idx+1)
+				}
+				editReqs[idx] += 1
+				mu2.Unlock()
+				doc_edit := createRandomEditDoc(docs[idx])
+				_, w := SetupPutDoc(DocService, doc_edit)
+				body, err := ioutil.ReadAll(w.Body)
+				if err != nil {
+					t.Errorf(err.Error())
+				}
+				if w.Code != http.StatusOK {
+					var actual AnsReq
+					if err := json.Unmarshal(body, &actual); err != nil {
+						t.Errorf(err.Error())
+					}
+					t.Log(actual.Message)
+					t.Errorf("HTTP Edit request status code error")
+				} else {
+					_, w := SetupIsChangeDoc(DocService, idx+1)
+					if w.Code != http.StatusOK {
+						var actual AnsReq
+						if err := json.Unmarshal(body, &actual); err != nil {
+							t.Errorf(err.Error())
+						}
+						t.Log(actual.Message)
+						t.Errorf("HTTP After Edit request status code error")
+					}
+				}
+			} else {
+				mu2.Lock()
+				if editReqs[idx] != 0 {
+					mu2.Unlock()
+					t.Errorf("more than one changing on doc with id %d", idx+1)
+				}
+				editReqs[idx] += 1
+				mu2.Unlock()
+			}
+			ch <- struct{}{}
+		}()
+	}
+	for i := 0; i < r; i++ {
+		<-ch
+	}
+}
+
+func SetupGetDocs(DocService DocService) (*http.Request, *httptest.ResponseRecorder) {
 	r := gin.Default()
 	url := "/docs"
 	r.GET("/docs", func(c *gin.Context) {
@@ -475,7 +549,74 @@ func SetupGetDocs(DocService service.DocService) (*http.Request, *httptest.Respo
 	return req, w
 }
 
-func SetupGetDoc(DocService service.DocService, idx int) (*http.Request, *httptest.ResponseRecorder) {
+func SetupIsChangeDoc(DocService DocService, idx int) (*http.Request, *httptest.ResponseRecorder) {
+	r := gin.Default()
+	url := "/docs/changing/" + strconv.FormatInt(int64(idx), 10)
+	r.PUT("/docs/changing/:id", func(c *gin.Context) {
+		id, err := strconv.ParseUint(c.Param("id"), 10, 64)
+		if err != nil {
+			c.JSON(500, gin.H{
+				"message": err.Error(),
+			})
+		} else {
+			err := DocService.ChangeIsChange(id)
+			if err == nil {
+				c.JSON(200, gin.H{
+					"message": "Successfully Exit",
+				})
+			} else {
+				c.JSON(500, gin.H{
+					"message": err.Error(),
+				})
+			}
+		}
+	})
+	req, err := http.NewRequest(http.MethodPut, url, nil)
+	if err != nil {
+		panic(err)
+	}
+
+	req.Header.Set("Content-Type", "application/json")
+
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+	return req, w
+}
+func SetupCanEditDoc(DocService DocService, idx int) (*http.Request, *httptest.ResponseRecorder) {
+	r := gin.Default()
+	url := "/docs/edit/" + strconv.FormatInt(int64(idx), 10)
+	r.GET("/docs/edit/:id", func(c *gin.Context) {
+		id, err := strconv.ParseUint(c.Param("id"), 10, 64)
+		if err != nil {
+			c.JSON(500, gin.H{
+				"message": err.Error(),
+			})
+		} else {
+			err := DocService.CanEdit(id)
+			if err == nil {
+				c.JSON(200, gin.H{
+					"message": "Can be edited",
+				})
+			} else {
+				c.JSON(500, gin.H{
+					"message": err.Error(),
+				})
+			}
+		}
+	})
+	req, err := http.NewRequest(http.MethodGet, url, nil)
+	if err != nil {
+		panic(err)
+	}
+
+	req.Header.Set("Content-Type", "application/json")
+
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+	return req, w
+}
+
+func SetupGetDoc(DocService DocService, idx int) (*http.Request, *httptest.ResponseRecorder) {
 	r := gin.Default()
 	url := "/docs/" + strconv.FormatInt(int64(idx), 10)
 	r.GET("/docs/:id", func(c *gin.Context) {
@@ -507,7 +648,7 @@ func SetupGetDoc(DocService service.DocService, idx int) (*http.Request, *httpte
 	return req, w
 }
 
-func SetupPostDocs(DocService service.DocService, body *bytes.Buffer) (*http.Request, *httptest.ResponseRecorder) {
+func SetupPostDocs(DocService DocService, body *bytes.Buffer) (*http.Request, *httptest.ResponseRecorder) {
 	r := gin.Default()
 
 	r.POST("/docs", func(c *gin.Context) {
@@ -531,6 +672,53 @@ func SetupPostDocs(DocService service.DocService, body *bytes.Buffer) (*http.Req
 		}
 	})
 	req, err := http.NewRequest(http.MethodPost, "/docs", body)
+	if err != nil {
+		panic(err)
+	}
+
+	req.Header.Set("Content-Type", "application/json")
+
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+	return req, w
+}
+
+func SetupPutDoc(DocService DocService, doc entity.AddRemoveDocItem) (*http.Request, *httptest.ResponseRecorder) {
+	r := gin.Default()
+	url := "/docs/" + strconv.FormatUint(uint64(doc.AtfNum), 10)
+	r.PUT("/docs/:id", func(c *gin.Context) {
+		id, err := strconv.ParseUint(c.Param("id"), 10, 64)
+		if err != nil {
+			c.JSON(500, gin.H{
+				"message": err.Error(),
+			})
+		} else {
+			//race condition
+			var doc entity.AddRemoveDocItem
+			err := c.ShouldBindJSON(&doc)
+			if err != nil {
+				c.JSON(500, gin.H{
+					"message": err.Error(),
+				})
+			} else {
+				err = DocService.SaveByID(id, doc)
+				if err != nil {
+					c.JSON(500, gin.H{
+						"message": err.Error(),
+					})
+				} else {
+					c.JSON(200, gin.H{
+						"message": "Successfully Updated",
+					})
+				}
+			}
+		}
+	})
+	reqBody, err := json.Marshal(doc)
+	if err != nil {
+		panic(err)
+	}
+	req, err := http.NewRequest(http.MethodPut, url, bytes.NewBuffer(reqBody))
 	if err != nil {
 		panic(err)
 	}
@@ -594,14 +782,14 @@ func createRandomTafsilis(n int, numberRunes []rune, letterRunes []rune) []entit
 	return tafsilis
 }
 
-func insertRandomPermanentTestDoc(DocService service.DocService, moeins []entity.Moein, tafsilis []entity.Tafsili, minorNums []string, descs []string, descItems []string, currs []string, currRates []int, count int) (entity.Doc, error) {
+func insertRandomPermanentTestDoc(DocService DocService, moeins []entity.Moein, tafsilis []entity.Tafsili, minorNums []string, descs []string, descItems []string, currs []string, currRates []int, count int) (entity.Doc, error) {
 	mu.Lock()
 	defer mu.Unlock()
 	var doc entity.Doc
 	num_of_items := rand.Intn(99) + 1
 	var docItems []entity.DocItem
 	for i := 0; i < num_of_items; i++ {
-		docItems = append(docItems, *createRandomDocItem(moeins, tafsilis, descItems, i+1, currs, currRates))
+		docItems = append(docItems, *createRandomDocItem(i + 1))
 	}
 	doc.DocItems = docItems
 	doc.AtfNum = atf_num_global
@@ -627,14 +815,14 @@ func insertRandomPermanentTestDoc(DocService service.DocService, moeins []entity
 	return doc, nil
 }
 
-func insertRandomTestDoc(DocService service.DocService, moeins []entity.Moein, tafsilis []entity.Tafsili, minorNums []string, descs []string, descItems []string, currs []string, currRates []int) (entity.Doc, error) {
+func insertRandomTestDoc(DocService DocService, moeins []entity.Moein, tafsilis []entity.Tafsili, minorNums []string, descs []string, descItems []string, currs []string, currRates []int) (entity.Doc, error) {
 	mu.Lock()
 	defer mu.Unlock()
 	var doc entity.Doc
 	num_of_items := rand.Intn(99) + 1
 	var docItems []entity.DocItem
 	for i := 0; i < num_of_items; i++ {
-		docItems = append(docItems, *createRandomDocItem(moeins, tafsilis, descItems, i+1, currs, currRates))
+		docItems = append(docItems, *createRandomDocItem(i + 1))
 	}
 	doc.DocItems = docItems
 	doc.AtfNum = atf_num_global
@@ -660,14 +848,14 @@ func insertRandomTestDoc(DocService service.DocService, moeins []entity.Moein, t
 	return doc, nil
 }
 
-func createRandomTestDoc(moeins []entity.Moein, tafsilis []entity.Tafsili, minorNums []string, descs []string, descItems []string, currs []string, currRates []int) entity.Doc {
+func createRandomTestDoc() entity.Doc {
 	mu.Lock()
 	defer mu.Unlock()
 	var doc entity.Doc
 	num_of_items := rand.Intn(99) + 1
 	var docItems []entity.DocItem
 	for i := 0; i < num_of_items; i++ {
-		docItems = append(docItems, *createRandomDocItem(moeins, tafsilis, descItems, i+1, currs, currRates))
+		docItems = append(docItems, *createRandomDocItem(i + 1))
 	}
 	doc.DocItems = docItems
 	doc.AtfNum = atf_num_global
@@ -689,8 +877,125 @@ func createRandomTestDoc(moeins []entity.Moein, tafsilis []entity.Tafsili, minor
 	doc.State = "موقت"
 	return doc
 }
+func createRandomEditDoc(doc entity.Doc) entity.AddRemoveDocItem {
+	var doc_res entity.AddRemoveDocItem = entity.AddRemoveDocItem{ID: doc.ID, DocNum: doc.DocNum, Year: doc.Year, Month: doc.Month, Day: doc.Day, Hour: doc.Hour, Minute: doc.Minute, Second: doc.Second, AtfNum: doc.AtfNum, MinorNum: doc.MinorNum, Desc: doc.Desc, State: doc.State, DailyNum: doc.DailyNum, DocType: doc.DocType, EmitSystem: doc.EmitSystem}
+	var editDefiner []bool
+	for i := 0; i < 6; i++ {
+		editDefiner = append(editDefiner, rand.Intn(2) == 0)
+	}
+	if editDefiner[0] {
+		doc_res.Year = 1401
+		doc_res.Month = rand.Intn(12) + 1
+		doc_res.Day = rand.Intn(29) + 1
+		doc_res.Hour = rand.Intn(23) + 1
+		doc_res.Minute = rand.Intn(59) + 1
+		doc_res.Second = rand.Intn(59) + 1
+	}
+	if editDefiner[1] {
+		doc_res.MinorNum = minorNums[rand.Intn(6)]
+	}
+	if editDefiner[2] {
+		doc_res.Desc = descs[rand.Intn(8)]
+	}
+	if editDefiner[3] {
+		num_of_items := rand.Intn(99) + 1
+		var docItems []entity.DocItem
+		for i := 0; i < num_of_items; i++ {
+			docItems = append(docItems, *createRandomDocItem(i + 1))
+		}
+		doc_res.AddDocItems = docItems
+	}
+	if editDefiner[4] {
+		num_of_items := rand.Intn(len(doc.DocItems)/5) + 1
+		var docItems []uint64
+		var chosen []int
+		for i := 0; i < num_of_items; i++ {
+			t := rand.Intn(len(doc.DocItems))
+			flag := 0
+			for j := 0; j < len(chosen); j++ {
+				if t == chosen[j] {
+					flag = 1
+					break
+				}
+			}
+			if flag == 0 {
+				docItems = append(docItems, doc.DocItems[t].ID)
+				chosen = append(chosen, t)
+			}
+		}
+		doc_res.RemoveDocItems = docItems
+	}
+	if editDefiner[5] {
+		num_of_items := rand.Intn(len(doc.DocItems)/3) + 1
+		var docItems []entity.DocItem
+		var chosen []int
+		for i := 0; i < num_of_items; i++ {
+			t := rand.Intn(len(doc.DocItems))
+			flag := 0
+			for j := 0; j < len(doc_res.RemoveDocItems); j++ {
+				if doc.DocItems[t].ID == doc_res.RemoveDocItems[j] {
+					flag = 1
+					break
+				}
+			}
+			if flag == 0 {
+				for j := 0; j < len(chosen); j++ {
+					if t == chosen[j] {
+						flag = 1
+						break
+					}
+				}
+				if flag == 0 {
+					docItems = append(docItems, *createRandomEditDocItem(doc.DocItems[t]))
+					chosen = append(chosen, t)
+				}
+			}
+		}
+		doc_res.EditDocItems = docItems
+	}
+	return doc_res
+}
 
-func createRandomDocItem(moeins []entity.Moein, tafsilis []entity.Tafsili, descItems []string, num int, currs []string, currRates []int) *entity.DocItem {
+func createRandomEditDocItem(d entity.DocItem) *entity.DocItem {
+	var docItem entity.DocItem = entity.DocItem{ID: d.ID, Moein: d.Moein, Tafsili: d.Tafsili, Bedehkar: d.Bedehkar, Bestankar: d.Bestankar, Desc: d.Desc, Curr: d.Curr, CurrPrice: d.CurrPrice, CurrRate: d.CurrRate}
+	if rand.Intn(5) == 0 {
+		docItem.Moein = moeins[rand.Intn(10)]
+	}
+	if docItem.Moein.TrackPossible {
+		if rand.Intn(3) == 0 {
+			docItem.Tafsili = tafsilis[rand.Intn(9)+1]
+		}
+	} else {
+		docItem.Tafsili = tafsilis[0]
+	}
+	if docItem.Moein.CurrPossible {
+		if rand.Intn(5) == 0 {
+			idx := rand.Intn(5)
+			docItem.Curr = currs[idx]
+			docItem.CurrPrice = rand.Intn(1000) + 10
+			docItem.CurrRate = currRates[idx]
+			if rand.Intn(2) == 0 {
+				docItem.Bedehkar = docItem.CurrRate * docItem.CurrPrice
+				docItem.Bestankar = 0
+			} else {
+				docItem.Bestankar = docItem.CurrRate * docItem.CurrPrice
+				docItem.Bedehkar = 0
+			}
+		}
+	} else {
+		if rand.Intn(4) == 0 {
+			if rand.Intn(2) == 0 {
+				docItem.Bedehkar = rand.Intn(100) * 1000
+				docItem.Bestankar = 0
+			} else {
+				docItem.Bestankar = rand.Intn(100) * 1000
+				docItem.Bedehkar = 0
+			}
+		}
+	}
+	return &docItem
+}
+func createRandomDocItem(num int) *entity.DocItem {
 	var docItem entity.DocItem
 	docItem.Desc = descItems[rand.Intn(50)]
 	docItem.Num = num
@@ -824,7 +1129,7 @@ func equalCode(i1 interface{}, i2 interface{}) bool {
 	return true
 }
 
-func ClearTable(DocService *service.DocService) {
+func ClearTable(DocService *DocService) {
 	// (*DocService).GetDB().Exec("DELETE FROM docs")
 	// (*DocService).GetDB().Exec("ALTER SEQUENCE docs_id_seq RESTART WITH 1")
 	// (*DocService).GetDB().Exec("DELETE FROM doc_items")
