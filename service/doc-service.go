@@ -265,6 +265,13 @@ func (service *docService) SaveByID(id uint64, doc entity.AddRemoveDocItem) erro
 		if res.Error != nil {
 			return res.Error
 		}
+
+		var doc_temp entity.Doc
+		tx.Model(&entity.Doc{}).Preload("DocItems").Where("id = ?", id).Find(&doc_temp)
+		x := len(doc_temp.DocItems)
+		if len(doc.AddDocItems) == 0 && len(doc.EditDocItems) == 0 && len(doc.RemoveDocItems) == x {
+			return errors.New("it must have at least 1 doc item")
+		}
 		for i := range doc.AddDocItems {
 			doc.AddDocItems[i].DocRefer = id
 			doc.AddDocItems[i].ID = 0

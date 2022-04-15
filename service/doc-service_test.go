@@ -8,9 +8,11 @@ import (
 	"math/rand"
 	"net/http"
 	"net/http/httptest"
+	"sort"
 	"strconv"
 	"sync"
 	"testing"
+	"time"
 
 	"github.com/gin-gonic/gin"
 	"gorm.io/driver/postgres"
@@ -112,7 +114,7 @@ func CreateMoeinTafsili(DocService DocService) ([]entity.Moein, []entity.Tafsili
 
 func Init(DocService DocService, n int) ([]entity.Doc, error) {
 	results := make(chan struct{}, n)
-	var docs = make([]entity.Doc, n)
+	docs := []entity.Doc{}
 
 	var err error
 	//moeins, tafsilis, err = GetMoeinTafsiliFromDB(DocService)
@@ -138,7 +140,7 @@ func Init(DocService DocService, n int) ([]entity.Doc, error) {
 	}
 	for i := 0; i < n; i++ {
 		go func() {
-			doc, err := insertRandomTestDoc(DocService, moeins, tafsilis, minorNums, descs, descItems, currs, currRates)
+			doc, err := insertRandomTestDoc(DocService)
 			if err != nil {
 				panic(err.Error())
 			}
@@ -160,48 +162,6 @@ func Init(DocService DocService, n int) ([]entity.Doc, error) {
 	}
 	return docs, nil
 }
-func Test_GetDocs(t *testing.T) {
-	db := NewDbConnectionTest()
-	glb := &entity.GlobalVars{}
-	glb.AtfNumGlobal = 1
-	glb.TodayCount = 1
-	db.Create(glb)
-
-	DocService := New(db)
-	defer DocService.CloseDB()
-	defer ClearTable(&DocService)
-	n := 1000
-	rand.Seed(int64(n))
-	expected, err := Init(DocService, n)
-	if err != nil {
-		t.Errorf(err.Error())
-	}
-
-	req, w := SetupGetDocs(DocService)
-	if req.Method != http.MethodGet {
-		t.Errorf("HTTP request method error")
-	}
-	if w.Code != http.StatusOK {
-		t.Errorf("HTTP request status code error")
-	}
-
-	body, err := ioutil.ReadAll(w.Body)
-	if err != nil {
-		t.Errorf(err.Error())
-	}
-
-	actual := []entity.Doc{}
-	if err := json.Unmarshal(body, &actual); err != nil {
-		t.Errorf(err.Error())
-	}
-
-	t.Log(len(actual), len(expected))
-	for i := 0; i < n; i++ {
-		if equalDoc(actual[i], expected[actual[i].AtfNum-1]) != "" {
-			t.Errorf("atf number %d is not correct expected %d instead of %d", i+1, expected[i].AtfNum, actual[i].AtfNum)
-		}
-	}
-}
 
 func Test_PostDocs(t *testing.T) {
 	db := NewDbConnectionTest()
@@ -218,6 +178,7 @@ func Test_PostDocs(t *testing.T) {
 
 	_, err := Init(DocService, n)
 	if err != nil {
+		ClearTable(&DocService)
 		t.Errorf(err.Error())
 	}
 
@@ -392,6 +353,50 @@ func Test_PostDocs(t *testing.T) {
 	}
 }
 
+func Test_GetDocs(t *testing.T) {
+	db := NewDbConnectionTest()
+	glb := &entity.GlobalVars{}
+	glb.AtfNumGlobal = 1
+	glb.TodayCount = 1
+	db.Create(glb)
+
+	DocService := New(db)
+	defer DocService.CloseDB()
+	defer ClearTable(&DocService)
+	n := 1000
+	rand.Seed(int64(n))
+	expected, err := Init(DocService, n)
+	if err != nil {
+		ClearTable(&DocService)
+		t.Errorf(err.Error())
+	}
+
+	req, w := SetupGetDocs(DocService)
+	if req.Method != http.MethodGet {
+		t.Errorf("HTTP request method error")
+	}
+	if w.Code != http.StatusOK {
+		t.Errorf("HTTP request status code error")
+	}
+
+	body, err := ioutil.ReadAll(w.Body)
+	if err != nil {
+		t.Errorf(err.Error())
+	}
+
+	actual := []entity.Doc{}
+	if err := json.Unmarshal(body, &actual); err != nil {
+		t.Errorf(err.Error())
+	}
+
+	t.Log(len(actual), len(expected))
+	for i := 0; i < n; i++ {
+		if equalDoc(actual[i], expected[actual[i].AtfNum-1]) != "" {
+			t.Errorf("atf number %d is not correct expected %d instead of %d", i+1, expected[i].AtfNum, actual[i].AtfNum)
+		}
+	}
+}
+
 func Test_GetDocID(t *testing.T) {
 	db := NewDbConnectionTest()
 	glb := &entity.GlobalVars{}
@@ -406,6 +411,7 @@ func Test_GetDocID(t *testing.T) {
 	rand.Seed(int64(n))
 	docs, err := Init(DocService, n)
 	if err != nil {
+		ClearTable(&DocService)
 		t.Errorf(err.Error())
 	}
 
@@ -427,7 +433,7 @@ func Test_GetDocID(t *testing.T) {
 				if err := json.Unmarshal(body, &actual); err != nil {
 					t.Errorf(err.Error())
 				}
-				t.Log(actual.Message)
+				//t.Log(actual.Message)
 				t.Errorf("HTTP request status code error")
 			}
 			var actual entity.Doc
@@ -435,7 +441,7 @@ func Test_GetDocID(t *testing.T) {
 				t.Errorf(err.Error())
 			}
 			if equalDoc(actual, docs[idx]) != "" {
-				t.Logf(equalDoc(actual, docs[idx]))
+				//t.Logf(equalDoc(actual, docs[idx]))
 				t.Errorf("expected atf_num %d instead of %d", docs[idx].AtfNum, actual.AtfNum)
 			}
 			ch <- struct{}{}
@@ -457,14 +463,14 @@ func Test_EditDoc(t *testing.T) {
 	defer DocService.CloseDB()
 	defer ClearTable(&DocService)
 	n := 10
-	r := 10
+	r := 100
 
 	editReqs := make([]int, n)
 
-	var docs = make([]entity.Doc, n)
 	rand.Seed(int64(n))
 	docs, err := Init(DocService, n)
 	if err != nil {
+		ClearTable(&DocService)
 		t.Errorf(err.Error())
 	}
 
@@ -476,16 +482,11 @@ func Test_EditDoc(t *testing.T) {
 		go func() {
 			idx := rand.Intn(n)
 
-			_, w := SetupCanEditDoc(DocService, idx+1)
-			if w.Code == http.StatusOK {
-				mu2[idx].Lock()
-				if editReqs[idx] != 0 {
-					mu2[idx].Unlock()
-					t.Errorf("more than one changing doc with id %d", idx+1)
-				}
-				editReqs[idx] += 1
-				mu2[idx].Unlock()
+			err := DocService.CanEdit(uint64(idx + 1)) //SetupCanEditDoc(DocService, idx+1)
+			if err == nil {
+				change(&editReqs[idx], &docs[idx], idx)
 				doc_edit := createRandomEditDoc(docs[idx])
+				time.Sleep(200 * time.Millisecond)
 				_, w := SetupPutDoc(DocService, doc_edit)
 				body, err := ioutil.ReadAll(w.Body)
 				if err != nil {
@@ -496,38 +497,164 @@ func Test_EditDoc(t *testing.T) {
 					if err := json.Unmarshal(body, &actual); err != nil {
 						t.Errorf(err.Error())
 					}
-					t.Log(actual.Message)
-					t.Errorf("HTTP Edit request status code error")
+					if actual.Message != "date must be bigger than latest permanent doc" {
+						t.Errorf(actual.Message)
+					}
 				} else {
-					_, w := SetupIsChangeDoc(DocService, idx+1)
-					if w.Code != http.StatusOK {
-						var actual AnsReq
-						if err := json.Unmarshal(body, &actual); err != nil {
-							t.Errorf(err.Error())
+					docs[idx].AtfNum = doc_edit.AtfNum
+					docs[idx].DailyNum = doc_edit.DailyNum
+					docs[idx].Year = doc_edit.Year
+					docs[idx].Month = doc_edit.Month
+					docs[idx].Day = doc_edit.Day
+					docs[idx].Hour = doc_edit.Hour
+					docs[idx].Minute = doc_edit.Minute
+					docs[idx].Second = doc_edit.Second
+					docs[idx].DocNum = doc_edit.DocNum
+					docs[idx].MinorNum = doc_edit.MinorNum
+					docs[idx].Desc = doc_edit.Desc
+					docs[idx].State = doc_edit.State
+					docs[idx].DocType = doc_edit.DocType
+					docs[idx].EmitSystem = doc_edit.EmitSystem
+					sort.Slice(doc_edit.RemoveDocItems, func(i2, j int) bool {
+						return doc_edit.RemoveDocItems[i2] > doc_edit.RemoveDocItems[j]
+					})
+					for _, item := range doc_edit.RemoveDocItems {
+						for j, item2 := range docs[idx].DocItems {
+							if item == item2.ID {
+								docs[idx].DocItems = append(docs[idx].DocItems[:j], docs[idx].DocItems[j:]...)
+								break
+							}
 						}
-						t.Log(actual.Message)
+					}
+					for _, item := range doc_edit.EditDocItems {
+						for j, item2 := range docs[idx].DocItems {
+							if item.ID == item2.ID {
+								docs[idx].DocItems[j] = item
+								docs[idx].DocItems[j].Moein = item.Moein
+								docs[idx].DocItems[j].Tafsili = item.Tafsili
+								break
+							}
+						}
+					}
+					docs[idx].DocItems = append(docs[idx].DocItems, doc_edit.AddDocItems...)
+
+					err := DocService.ChangeIsChange(uint64(idx + 1)) //SetupIsChangeDoc(DocService, idx+1)
+					if err != nil {
+						//t.Log(actual.Message)
 						t.Errorf("HTTP After Edit request status code error")
 					}
+					afterChange(&editReqs[idx], idx)
 				}
 			} else {
-				mu2[idx].Lock()
-				if editReqs[idx] != 1 {
-					mu2[idx].Unlock()
-					t.Errorf("problem in changing doc with id %d", idx+1)
+				t.Log(err.Error())
+				if docs[idx].State != "دائمی" {
+					t.Log("Reject Not " + strconv.FormatInt(int64(idx+1), 10) + "\t" + strconv.FormatFloat(float64(time.Now().Nanosecond())/100000, 'e', 3, 64))
+					notChange(&editReqs[idx], &docs[idx], idx)
 				} else {
-					editReqs[idx] -= 1
-					mu2[idx].Unlock()
+					if err.Error() != "doc is permanent" {
+						t.Errorf("Reject permanent " + strconv.FormatInt(int64(idx+1), 10))
+					}
 				}
 			}
 			ch <- struct{}{}
 		}()
 	}
+
+	for {
+		idx := rand.Intn(n)
+
+		err = DocService.CanEdit(uint64(idx + 1))
+		if err == nil {
+			change(&editReqs[idx], &docs[idx], idx)
+			doc_edit := createRandomEditDoc(docs[idx])
+			doc_edit.Month = 3
+			doc_edit.AddDocItems = make([]entity.DocItem, 0)
+			doc_edit.EditDocItems = make([]entity.DocItem, 0)
+			doc_edit.RemoveDocItems = make([]uint64, 0)
+			var doc_temp entity.Doc
+			DocService.GetDB().Model(&entity.Doc{}).Preload("DocItems").Where("id = ?", idx+1).Find(&doc_temp)
+			for _, item := range doc_temp.DocItems {
+				doc_edit.RemoveDocItems = append(doc_edit.RemoveDocItems, item.ID)
+			}
+			time.Sleep(1 * time.Second)
+			_, w := SetupPutDoc(DocService, doc_edit)
+			body, err := ioutil.ReadAll(w.Body)
+			if err != nil {
+				t.Errorf(err.Error() + "_last")
+			}
+			t.Log(len(doc_edit.AddDocItems), len(doc_edit.EditDocItems), len(doc_edit.RemoveDocItems), len(docs[idx].DocItems))
+			if w.Code != http.StatusOK {
+				var actual AnsReq
+				if err := json.Unmarshal(body, &actual); err != nil {
+					t.Errorf(err.Error() + "_last")
+				}
+				if actual.Message != "it must have at least 1 doc item" {
+					t.Errorf(actual.Message + "_last")
+				}
+			} else {
+				t.Errorf("must not accept" + "_last " + strconv.FormatInt(int64(idx+1), 10))
+			}
+			err = DocService.ChangeIsChange(uint64(idx + 1)) //SetupIsChangeDoc(DocService, idx+1)
+			if err != nil {
+				t.Errorf("HTTP After Edit request status code error" + "_last")
+			}
+			afterChange(&editReqs[idx], idx)
+			break
+		} else {
+			t.Log(err.Error())
+			if docs[idx].State != "دائمی" {
+				t.Log("Reject Not " + strconv.FormatInt(int64(idx+1), 10) + "\t" + strconv.FormatFloat(float64(time.Now().Nanosecond())/100000, 'e', 3, 64) + "_last")
+				notChange(&editReqs[idx], &docs[idx], idx)
+			} else {
+				t.Log("Reject Permanent" + strconv.FormatInt(int64(idx+1), 10) + "_last")
+			}
+		}
+	}
+
 	for i := 0; i < r; i++ {
 		<-ch
+	}
+
+	actual, err := DocService.FindAll()
+	if err != nil {
+		t.Errorf(err.Error())
+	} else {
+		for i := 0; i < len(docs); i++ {
+			if equalDoc(actual[i], docs[actual[i].AtfNum-1]) != "" && equalDoc(actual[i], docs[actual[i].AtfNum-1]) != "ischange" {
+				t.Errorf(equalDoc(actual[i], docs[actual[i].AtfNum-1]))
+			}
+		}
+	}
+
+}
+
+func change(x *int, y *entity.Doc, idx int) {
+	mu2[idx].Lock()
+	defer mu2[idx].Unlock()
+	if *x != 0 {
+		panic(y.ID)
+		//t.Errorf("more than one changing doc with id %d number of %d", idx+1, editReqs[idx])
+	}
+	*x += 1
+}
+
+func afterChange(x *int, idx int) {
+	mu2[idx].Lock()
+	defer mu2[idx].Unlock()
+	*x -= 1
+}
+
+func notChange(x *int, y *entity.Doc, idx int) {
+	mu2[idx].Lock()
+	defer mu2[idx].Unlock()
+	if *x != 1 {
+		panic("problem in changing doc with id " + strconv.FormatInt(int64(idx)+1, 10) + " with number of " + strconv.FormatInt(int64(*x), 10) + "------- " + strconv.FormatBool(y.IsChanging))
+		//t.Errorf("problem in changing doc with id %d with number of %d", idx+1, editReqs[idx])
 	}
 }
 
 func SetupGetDocs(DocService DocService) (*http.Request, *httptest.ResponseRecorder) {
+	gin.SetMode(gin.ReleaseMode)
 	r := gin.Default()
 	url := "/docs"
 	r.GET("/docs", func(c *gin.Context) {
@@ -553,6 +680,7 @@ func SetupGetDocs(DocService DocService) (*http.Request, *httptest.ResponseRecor
 }
 
 func SetupIsChangeDoc(DocService DocService, idx int) (*http.Request, *httptest.ResponseRecorder) {
+	gin.SetMode(gin.ReleaseMode)
 	r := gin.Default()
 	url := "/docs/changing/" + strconv.FormatInt(int64(idx), 10)
 	r.PUT("/docs/changing/:id", func(c *gin.Context) {
@@ -586,6 +714,7 @@ func SetupIsChangeDoc(DocService DocService, idx int) (*http.Request, *httptest.
 	return req, w
 }
 func SetupCanEditDoc(DocService DocService, idx int) (*http.Request, *httptest.ResponseRecorder) {
+	gin.SetMode(gin.ReleaseMode)
 	r := gin.Default()
 	url := "/docs/edit/" + strconv.FormatInt(int64(idx), 10)
 	r.GET("/docs/edit/:id", func(c *gin.Context) {
@@ -620,6 +749,7 @@ func SetupCanEditDoc(DocService DocService, idx int) (*http.Request, *httptest.R
 }
 
 func SetupGetDoc(DocService DocService, idx int) (*http.Request, *httptest.ResponseRecorder) {
+	gin.SetMode(gin.ReleaseMode)
 	r := gin.Default()
 	url := "/docs/" + strconv.FormatInt(int64(idx), 10)
 	r.GET("/docs/:id", func(c *gin.Context) {
@@ -652,6 +782,7 @@ func SetupGetDoc(DocService DocService, idx int) (*http.Request, *httptest.Respo
 }
 
 func SetupPostDocs(DocService DocService, body *bytes.Buffer) (*http.Request, *httptest.ResponseRecorder) {
+	gin.SetMode(gin.ReleaseMode)
 	r := gin.Default()
 
 	r.POST("/docs", func(c *gin.Context) {
@@ -687,6 +818,7 @@ func SetupPostDocs(DocService DocService, body *bytes.Buffer) (*http.Request, *h
 }
 
 func SetupPutDoc(DocService DocService, doc entity.AddRemoveDocItem) (*http.Request, *httptest.ResponseRecorder) {
+	gin.SetMode(gin.ReleaseMode)
 	r := gin.Default()
 	url := "/docs/" + strconv.FormatUint(uint64(doc.AtfNum), 10)
 	r.PUT("/docs/:id", func(c *gin.Context) {
@@ -818,7 +950,7 @@ func insertRandomPermanentTestDoc(DocService DocService, moeins []entity.Moein, 
 	return doc, nil
 }
 
-func insertRandomTestDoc(DocService DocService, moeins []entity.Moein, tafsilis []entity.Tafsili, minorNums []string, descs []string, descItems []string, currs []string, currRates []int) (entity.Doc, error) {
+func insertRandomTestDoc(DocService DocService) (entity.Doc, error) {
 	mu.Lock()
 	defer mu.Unlock()
 	var doc entity.Doc
