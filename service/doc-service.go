@@ -411,6 +411,9 @@ func (service *docService) ValidateDocItem(docItem entity.DocItem) error {
 			return res.Error
 		}
 		if moein.TrackPossible {
+			if docItem.Tafsili.CodeVal == "" {
+				return errors.New("moein must have tafsili")
+			}
 			res = tx.Model(&entity.Tafsili{}).Where("code_val = ?", docItem.Tafsili.CodeVal).First(&tafsili)
 			if res.Error != nil {
 				return res.Error

@@ -4,6 +4,7 @@ import (
 	"AccountingDoc/Gin-Server/entity"
 	"bytes"
 	"encoding/json"
+	"errors"
 	"io/ioutil"
 	"math/rand"
 	"net/http"
@@ -353,6 +354,30 @@ func Test_PostDocs(t *testing.T) {
 	}
 }
 
+func FuzzPostDocs(f *testing.F) {
+	db := NewDbConnectionTest()
+	glb := &entity.GlobalVars{}
+	glb.AtfNumGlobal = 1
+	glb.TodayCount = 1
+	db.Create(glb)
+
+	DocService := New(db)
+	defer DocService.CloseDB()
+	defer ClearTable(&DocService)
+	n := 1000
+	rand.Seed(int64(n))
+	_, err := Init(DocService, n)
+	if err != nil {
+		ClearTable(&DocService)
+		panic(err.Error())
+	}
+
+	f.Fuzz(func(t *testing.T, docItems []entity.DocItem, doc entity.Doc) {
+		doc.DocItems = docItems
+		DocService.Save(doc)
+	})
+}
+
 func Test_GetDocs(t *testing.T) {
 	db := NewDbConnectionTest()
 	glb := &entity.GlobalVars{}
@@ -486,7 +511,7 @@ func Test_EditDoc(t *testing.T) {
 			if err == nil {
 				change(&editReqs[idx], &docs[idx], idx)
 				doc_edit := createRandomEditDoc(docs[idx])
-				time.Sleep(200 * time.Millisecond)
+				//time.Sleep(200 * time.Millisecond)
 				_, w := SetupPutDoc(DocService, doc_edit)
 				body, err := ioutil.ReadAll(w.Body)
 				if err != nil {
@@ -576,7 +601,7 @@ func Test_EditDoc(t *testing.T) {
 			for _, item := range doc_temp.DocItems {
 				doc_edit.RemoveDocItems = append(doc_edit.RemoveDocItems, item.ID)
 			}
-			time.Sleep(1 * time.Second)
+			//time.Sleep(1 * time.Second)
 			_, w := SetupPutDoc(DocService, doc_edit)
 			body, err := ioutil.ReadAll(w.Body)
 			if err != nil {
@@ -653,12 +678,669 @@ func notChange(x *int, y *entity.Doc, idx int) {
 	}
 }
 
+func Test_ChangeState(t *testing.T) {
+	db := NewDbConnectionTest()
+	glb := &entity.GlobalVars{}
+	glb.AtfNumGlobal = 1
+	glb.TodayCount = 1
+	db.Create(glb)
+
+	DocService := New(db)
+	defer DocService.CloseDB()
+	defer ClearTable(&DocService)
+	n := 10
+	r := 100
+
+	editReqs := make([]int, n)
+
+	rand.Seed(int64(n))
+	docs, err := Init(DocService, n)
+	if err != nil {
+		ClearTable(&DocService)
+		t.Errorf(err.Error())
+	}
+
+	t.Log(len(docs))
+	ch := make(chan struct{}, r)
+	mu2 = make([]sync.RWMutex, n)
+
+	for i := 0; i < r; i++ {
+		go func() {
+			idx := rand.Intn(n)
+
+			_, w := SetupPutChangeStateDoc(DocService, idx+1)
+			body, err := ioutil.ReadAll(w.Body)
+			if err != nil {
+				t.Errorf(err.Error())
+			}
+			if w.Code != http.StatusOK {
+				var actual AnsReq
+				if err := json.Unmarshal(body, &actual); err != nil {
+					t.Errorf(err.Error())
+				}
+				if docs[idx].State != "دائمی" && actual.Message == "doc is permanent" {
+					t.Errorf(actual.Message + " موقت")
+				}
+				if actual.Message == "sb else is changing doc" {
+					notChange(&editReqs[idx], &docs[idx], idx)
+				}
+			} else {
+				change(&editReqs[idx], &docs[idx], idx)
+				docs[idx].State = "دائمی"
+				afterChange(&editReqs[idx], idx)
+			}
+			ch <- struct{}{}
+		}()
+	}
+
+	for i := 0; i < r; i++ {
+		<-ch
+	}
+
+	actual, err := DocService.FindAll()
+	if err != nil {
+		t.Errorf(err.Error())
+	} else {
+		for i := 0; i < len(docs); i++ {
+			if equalDoc(actual[i], docs[actual[i].AtfNum-1]) != "" && equalDoc(actual[i], docs[actual[i].AtfNum-1]) != "ischange" {
+				t.Errorf(equalDoc(actual[i], docs[actual[i].AtfNum-1]))
+			}
+		}
+	}
+
+}
+
+func Test_DeleteDoc(t *testing.T) {
+	db := NewDbConnectionTest()
+	glb := &entity.GlobalVars{}
+	glb.AtfNumGlobal = 1
+	glb.TodayCount = 1
+	db.Create(glb)
+
+	DocService := New(db)
+	defer DocService.CloseDB()
+	defer ClearTable(&DocService)
+	n := 100
+	r := 1
+	rand.Seed(int64(n))
+	docs, err := Init(DocService, n)
+	first_docs := docs
+	if err != nil {
+		ClearTable(&DocService)
+		t.Errorf(err.Error())
+	}
+	editReqs := make([]int, len(docs))
+	ch := make(chan struct{}, r)
+	mu2 = make([]sync.RWMutex, len(docs))
+
+	for i := 0; i < r; i++ {
+		go func() {
+			idx := rand.Intn(len(docs))
+			_, w := SetupDeleteDoc(DocService, first_docs[idx].AtfNum)
+			body, err := ioutil.ReadAll(w.Body)
+			if err != nil {
+				t.Errorf(err.Error())
+			}
+			if w.Code != http.StatusOK {
+				var actual AnsReq
+				if err := json.Unmarshal(body, &actual); err != nil {
+					t.Errorf(err.Error())
+				}
+				if actual.Message != "record not found" {
+					if docs[docs[idx].AtfNum-1].State != "دائمی" && actual.Message == "doc is permanent" {
+						t.Errorf(actual.Message + " موقت")
+					}
+					if actual.Message == "sb else is changing doc" {
+						notChange(&editReqs[docs[idx].AtfNum-1], &docs[idx], docs[idx].AtfNum-1)
+					}
+				}
+			} else {
+				change(&editReqs[docs[idx].AtfNum-1], &docs[idx], docs[idx].AtfNum-1)
+				docs = append(docs[:idx], docs[idx+1:]...)
+				t.Log(len(docs))
+				afterChange(&editReqs[docs[idx].AtfNum-1], docs[idx].AtfNum-1)
+			}
+			ch <- struct{}{}
+		}()
+	}
+
+	for i := 0; i < r; i++ {
+		<-ch
+	}
+
+	actual, err := DocService.FindAll()
+	if err != nil {
+		t.Errorf(err.Error())
+	} else {
+		t.Log(len(actual), len(docs))
+		for i := 0; i < len(docs); i++ {
+			flag := 0
+			for j := 0; j < len(actual); j++ {
+				if equalDoc(actual[j], docs[i]) == "" || equalDoc(actual[j], docs[i]) == "ischange" {
+					flag = 1
+					break
+				}
+			}
+			if flag == 0 {
+				t.Fail()
+			}
+		}
+	}
+
+}
+
+func Test_GetMoeinTafsili(t *testing.T) {
+	db := NewDbConnectionTest()
+	glb := &entity.GlobalVars{}
+	glb.AtfNumGlobal = 1
+	glb.TodayCount = 1
+	db.Create(glb)
+
+	DocService := New(db)
+
+	defer DocService.CloseDB()
+	defer ClearTable(&DocService)
+	n := 10
+	rand.Seed(int64(n))
+	_, err := Init(DocService, n)
+	if err != nil {
+		ClearTable(&DocService)
+		t.Errorf(err.Error())
+	}
+	DocService.GetDB().Save(&moeins)
+	DocService.GetDB().Save(&tafsilis)
+
+	req, w := SetupGetMoein(DocService)
+	if req.Method != http.MethodGet {
+		t.Errorf("HTTP request method error")
+	}
+	if w.Code != http.StatusOK {
+		t.Errorf("HTTP request status code error")
+	}
+	req2, w2 := SetupGetTafsili(DocService)
+	if req2.Method != http.MethodGet {
+		t.Errorf("HTTP request method error")
+	}
+	if w2.Code != http.StatusOK {
+		t.Errorf("HTTP request status code error")
+	}
+
+	body, err := ioutil.ReadAll(w.Body)
+	if err != nil {
+		t.Errorf(err.Error())
+	}
+
+	actual := []entity.Moein{}
+	if err := json.Unmarshal(body, &actual); err != nil {
+		t.Errorf(err.Error())
+	}
+
+	for _, item := range moeins {
+		for _, item2 := range actual {
+			if item.CodeVal == item2.CodeVal {
+				if item.CurrPossible != item2.CurrPossible || item.Name != item2.Name || item.TrackPossible != item2.TrackPossible {
+					t.Errorf("moeins dont match")
+				}
+				break
+			}
+		}
+	}
+
+	body, err = ioutil.ReadAll(w2.Body)
+	if err != nil {
+		t.Errorf(err.Error())
+	}
+
+	actual2 := []entity.Tafsili{}
+	if err := json.Unmarshal(body, &actual2); err != nil {
+		t.Errorf(err.Error())
+	}
+
+	for _, item := range tafsilis {
+		for _, item2 := range actual2 {
+			if item.CodeVal == item2.CodeVal {
+				if item.CurrPossible != item2.CurrPossible || item.Name != item2.Name || item.TrackPossible != item2.TrackPossible {
+					t.Errorf("tafsilis dont match")
+				}
+				break
+			}
+		}
+	}
+}
+
+func Test_ValidateDocItem(t *testing.T) {
+	db := NewDbConnectionTest()
+	glb := &entity.GlobalVars{}
+	glb.AtfNumGlobal = 1
+	glb.TodayCount = 1
+	db.Create(glb)
+
+	DocService := New(db)
+
+	defer DocService.CloseDB()
+	defer ClearTable(&DocService)
+	n := 10
+	rand.Seed(int64(n))
+	_, err := Init(DocService, n)
+	if err != nil {
+		ClearTable(&DocService)
+		t.Errorf(err.Error())
+	}
+	DocService.GetDB().Save(&moeins)
+	DocService.GetDB().Save(&tafsilis)
+
+	r := 10
+	for i := 0; i < r; i++ {
+		go func() {
+			docItem := createRandomDocItem(1)
+			_, w := SetupValidateDocItem(DocService, *docItem)
+			body, err := ioutil.ReadAll(w.Body)
+			if err != nil {
+				t.Errorf(err.Error())
+			}
+			if w.Code != http.StatusOK {
+				var actual AnsReq
+				if err := json.Unmarshal(body, &actual); err != nil {
+					t.Errorf(err.Error())
+				}
+				//t.Log(*docItem)
+				t.Errorf(actual.Message)
+			}
+		}()
+	}
+
+	docItem := createRandomDocItem(1)
+	docItem.Desc = ""
+	err = validNegDocItem(DocService, *docItem)
+	if err != nil && err.Error() != "docItem needs a description" {
+		t.Errorf(err.Error())
+	}
+	if err == nil {
+		t.Fail()
+	}
+
+	//
+	docItem = createRandomDocItem(1)
+	docItem.Bedehkar = 0
+	docItem.Bestankar = 0
+	err = validNegDocItem(DocService, *docItem)
+	if err != nil && err.Error() != "docItem must have value in bestankar or bedehkar" {
+		t.Errorf(err.Error())
+	}
+	if err == nil {
+		t.Fail()
+	}
+	//
+	docItem = createRandomDocItem(1)
+	docItem.Bedehkar = 100
+	docItem.Bestankar = 1000
+	err = validNegDocItem(DocService, *docItem)
+	if err != nil && err.Error() != "docItem must have value in one of bestankar and bedehkar fields" {
+		t.Errorf(err.Error())
+	}
+	if err == nil {
+		t.Fail()
+	}
+	//
+	docItem = createRandomDocItem(1)
+	docItem.Moein.CodeVal = "8888p"
+	err = validNegDocItem(DocService, *docItem)
+	if err == nil {
+		t.Fail()
+	}
+	//
+	docItem = createRandomDocItem(1)
+	for _, item := range moeins {
+		if item.TrackPossible {
+			docItem.Moein = item
+			break
+		}
+	}
+	docItem.Tafsili.CodeVal = "8888p"
+	err = validNegDocItem(DocService, *docItem)
+	if err == nil {
+		t.Fail()
+	}
+	//
+	docItem = createRandomDocItem(1)
+	for _, item := range moeins {
+		if item.TrackPossible {
+			docItem.Moein = item
+			break
+		}
+	}
+	docItem.Tafsili.CodeVal = ""
+	err = validNegDocItem(DocService, *docItem)
+	if err == nil {
+		t.Fail()
+	}
+	//
+	docItem = createRandomDocItem(1)
+	for _, item := range moeins {
+		if !item.TrackPossible {
+			docItem.Moein = item
+			break
+		}
+	}
+	docItem.Tafsili.CodeVal = tafsilis[1].CodeVal
+	err = validNegDocItem(DocService, *docItem)
+	if err != nil && err.Error() != "moein cannot have any tafsilis" {
+		t.Errorf(err.Error())
+	}
+	if err == nil {
+		t.Fail()
+	}
+	//
+	docItem = createRandomDocItem(1)
+	for _, item := range moeins {
+		if item.CurrPossible {
+			docItem.Moein = item
+			break
+		}
+	}
+	docItem.CurrPrice = 0
+	err = validNegDocItem(DocService, *docItem)
+	if err != nil && err.Error() != "moein must have currency options" {
+		t.Errorf(err.Error())
+	}
+	if err == nil {
+		t.Fail()
+	}
+	//
+	docItem = createRandomDocItem(1)
+	for _, item := range moeins {
+		if item.CurrPossible {
+			docItem.Moein = item
+			break
+		}
+	}
+	docItem.Curr = currs[1]
+	docItem.CurrPrice = 3
+	docItem.CurrRate = 7
+	docItem.Bedehkar = 22
+	docItem.Bestankar = 0
+	err = validNegDocItem(DocService, *docItem)
+	if err != nil && err.Error() != "value in bedehkar doesnt match with currency" {
+		t.Errorf(err.Error())
+	}
+	if err == nil {
+		t.Fail()
+	}
+	//
+	docItem = createRandomDocItem(1)
+	for _, item := range moeins {
+		if item.CurrPossible {
+			docItem.Moein = item
+			break
+		}
+	}
+	docItem.Curr = currs[1]
+	docItem.CurrPrice = 3
+	docItem.CurrRate = 7
+	docItem.Bedehkar = 0
+	docItem.Bestankar = 22
+	err = validNegDocItem(DocService, *docItem)
+	if err != nil && err.Error() != "value in bestankar doesnt match with currency" {
+		t.Errorf(err.Error())
+	}
+	if err == nil {
+		t.Fail()
+	}
+	//
+	docItem = createRandomDocItem(1)
+	for _, item := range moeins {
+		if !item.CurrPossible {
+			docItem.Moein = item
+			break
+		}
+	}
+	docItem.CurrRate = 5
+	err = validNegDocItem(DocService, *docItem)
+	if err != nil && err.Error() != "moein must not have currency options" {
+		t.Errorf(err.Error())
+	}
+	if err == nil {
+		t.Fail()
+	}
+	//
+}
+
+func Test_Numbering(t *testing.T) {
+	db := NewDbConnectionTest()
+	glb := &entity.GlobalVars{}
+	glb.AtfNumGlobal = 1
+	glb.TodayCount = 1
+	db.Create(glb)
+
+	DocService := New(db)
+
+	defer DocService.CloseDB()
+	defer ClearTable(&DocService)
+	n := 1000
+	rand.Seed(int64(n))
+	docs, err := Init(DocService, n)
+	if err != nil {
+		ClearTable(&DocService)
+		t.Errorf(err.Error())
+	}
+
+	_, w := SetupNumbering(DocService)
+	body, err := ioutil.ReadAll(w.Body)
+	if err != nil {
+		t.Errorf(err.Error())
+	}
+	if w.Code != http.StatusOK {
+		var actual AnsReq
+		if err := json.Unmarshal(body, &actual); err != nil {
+			t.Errorf(err.Error())
+		}
+	}
+
+	DocService.GetDB().Model(&entity.Doc{}).Order("doc_num asc").Find(&docs)
+	for i := 0; i < len(docs)-1; i++ {
+		d1 := Date{docs[i].Year, docs[i].Month, docs[i].Day, docs[i].Hour, docs[i].Minute, docs[i].Second}
+		d2 := Date{docs[i+1].Year, docs[i+1].Month, docs[i+1].Day, docs[i+1].Hour, docs[i+1].Minute, docs[i+1].Second}
+		if compare(&d1, &d2) > 0 {
+			t.Fail()
+		}
+	}
+
+}
+
+func Test_FilterByMinorNum(t *testing.T) {
+	db := NewDbConnectionTest()
+	glb := &entity.GlobalVars{}
+	glb.AtfNumGlobal = 1
+	glb.TodayCount = 1
+	db.Create(glb)
+
+	DocService := New(db)
+
+	defer DocService.CloseDB()
+	defer ClearTable(&DocService)
+	n := 1000
+	rand.Seed(int64(n))
+	docs, err := Init(DocService, n)
+	if err != nil {
+		ClearTable(&DocService)
+		t.Errorf(err.Error())
+	}
+
+	m := make(map[string]int)
+	for _, item := range docs {
+		x, ok := m[item.MinorNum]
+		if !ok {
+			m[item.MinorNum] = 1
+		} else {
+			m[item.MinorNum] = x + 1
+		}
+	}
+
+	for i := 0; i < 6; i++ {
+		minorNum := minorNums[i]
+		_, w := SetupFilterMinor(DocService, minorNum)
+		body, err := ioutil.ReadAll(w.Body)
+		if err != nil {
+			t.Errorf(err.Error())
+		}
+		if i == 0 {
+			if w.Code != 500 {
+				t.Fail()
+			}
+		} else {
+			if w.Code == 500 {
+				t.Fail()
+			} else {
+				var actual []entity.Doc
+				if err := json.Unmarshal(body, &actual); err != nil {
+					t.Fail()
+				}
+				if len(actual) != m[minorNums[i]] {
+					t.Fail()
+				}
+			}
+		}
+	}
+}
+
+func validNegDocItem(DocService DocService, docItem entity.DocItem) error {
+	_, w := SetupValidateDocItem(DocService, docItem)
+	body, err := ioutil.ReadAll(w.Body)
+	if err != nil {
+		return err
+	}
+	if w.Code == http.StatusOK {
+		return nil
+	} else {
+		var actual AnsReq
+		if err := json.Unmarshal(body, &actual); err != nil {
+			return err
+		}
+		if actual.Message != "" {
+			return errors.New(actual.Message)
+		}
+	}
+	return nil
+}
+
 func SetupGetDocs(DocService DocService) (*http.Request, *httptest.ResponseRecorder) {
 	gin.SetMode(gin.ReleaseMode)
 	r := gin.Default()
 	url := "/docs"
 	r.GET("/docs", func(c *gin.Context) {
 		res, err := DocService.FindAll()
+		if err == nil {
+			c.JSON(200, res)
+		} else {
+			c.JSON(500, gin.H{
+				"message": err.Error(),
+			})
+		}
+	})
+	req, err := http.NewRequest(http.MethodGet, url, nil)
+	if err != nil {
+		panic(err)
+	}
+
+	req.Header.Set("Content-Type", "application/json")
+
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+	return req, w
+}
+
+func SetupFilterMinor(DocService DocService, idx string) (*http.Request, *httptest.ResponseRecorder) {
+	gin.SetMode(gin.ReleaseMode)
+	r := gin.Default()
+	url := "/docs/filter/minor_num/" + idx
+	r.GET("/docs/filter/minor_num/", func(c *gin.Context) {
+		c.JSON(500, gin.H{
+			"message": "minor num field must not be empty",
+		})
+	})
+	r.GET("/docs/filter/minor_num/:minor", func(c *gin.Context) {
+		minor_num := c.Param("minor")
+		res, err := DocService.FilterByMinorNum(minor_num)
+		if err != nil {
+			c.JSON(500, gin.H{
+				"message": err.Error(),
+			})
+		} else {
+			c.JSON(200, res)
+		}
+	})
+	req, err := http.NewRequest(http.MethodGet, url, nil)
+	if err != nil {
+		panic(err)
+	}
+
+	req.Header.Set("Content-Type", "application/json")
+
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+	return req, w
+}
+
+func SetupNumbering(DocService DocService) (*http.Request, *httptest.ResponseRecorder) {
+	gin.SetMode(gin.ReleaseMode)
+	r := gin.Default()
+	url := "/docs/numbering"
+	r.GET("/docs/numbering", func(c *gin.Context) {
+		err := DocService.Numbering()
+		if err == nil {
+			c.JSON(200, gin.H{
+				"message": "Successfully Numbered",
+			})
+		} else {
+			c.JSON(500, gin.H{
+				"message": err.Error(),
+			})
+		}
+	})
+	req, err := http.NewRequest(http.MethodGet, url, nil)
+	if err != nil {
+		panic(err)
+	}
+
+	req.Header.Set("Content-Type", "application/json")
+
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+	return req, w
+}
+
+func SetupGetMoein(DocService DocService) (*http.Request, *httptest.ResponseRecorder) {
+	gin.SetMode(gin.ReleaseMode)
+	r := gin.Default()
+	url := "/docs/moeins"
+	r.GET("/docs/moeins", func(c *gin.Context) {
+		res, err := DocService.FindMoeins()
+		if err == nil {
+			c.JSON(200, res)
+		} else {
+			c.JSON(500, gin.H{
+				"message": err.Error(),
+			})
+		}
+	})
+	req, err := http.NewRequest(http.MethodGet, url, nil)
+	if err != nil {
+		panic(err)
+	}
+
+	req.Header.Set("Content-Type", "application/json")
+
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+	return req, w
+}
+
+func SetupGetTafsili(DocService DocService) (*http.Request, *httptest.ResponseRecorder) {
+	gin.SetMode(gin.ReleaseMode)
+	r := gin.Default()
+	url := "/docs/tafsilis"
+	r.GET("/docs/tafsilis", func(c *gin.Context) {
+		res, err := DocService.FindTafsilis()
 		if err == nil {
 			c.JSON(200, res)
 		} else {
@@ -713,6 +1395,42 @@ func SetupIsChangeDoc(DocService DocService, idx int) (*http.Request, *httptest.
 	r.ServeHTTP(w, req)
 	return req, w
 }
+func SetupDeleteDoc(DocService DocService, idx int) (*http.Request, *httptest.ResponseRecorder) {
+	gin.SetMode(gin.ReleaseMode)
+	r := gin.Default()
+	url := "/docs/" + strconv.FormatInt(int64(idx), 10)
+	r.DELETE("/docs/:id", func(c *gin.Context) {
+		id, err := strconv.ParseUint(c.Param("id"), 10, 64)
+		if err != nil {
+			c.JSON(500, gin.H{
+				"message": err.Error(),
+			})
+		} else {
+			err := DocService.DeleteByID(id)
+			if err == nil {
+				c.JSON(200, gin.H{
+					"message": "Successfully Delete",
+				})
+			} else {
+				c.JSON(500, gin.H{
+					"message": err.Error(),
+				})
+			}
+		}
+	})
+
+	req, err := http.NewRequest(http.MethodDelete, url, nil)
+	if err != nil {
+		panic(err)
+	}
+
+	req.Header.Set("Content-Type", "application/json")
+
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+	return req, w
+}
+
 func SetupCanEditDoc(DocService DocService, idx int) (*http.Request, *httptest.ResponseRecorder) {
 	gin.SetMode(gin.ReleaseMode)
 	r := gin.Default()
@@ -737,6 +1455,41 @@ func SetupCanEditDoc(DocService DocService, idx int) (*http.Request, *httptest.R
 		}
 	})
 	req, err := http.NewRequest(http.MethodGet, url, nil)
+	if err != nil {
+		panic(err)
+	}
+
+	req.Header.Set("Content-Type", "application/json")
+
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+	return req, w
+}
+
+func SetupPutChangeStateDoc(DocService DocService, idx int) (*http.Request, *httptest.ResponseRecorder) {
+	gin.SetMode(gin.ReleaseMode)
+	r := gin.Default()
+	url := "/docs/change_state/" + strconv.FormatInt(int64(idx), 10)
+	r.PUT("/docs/change_state/:id", func(c *gin.Context) {
+		id, err := strconv.ParseUint(c.Param("id"), 10, 64)
+		if err != nil {
+			c.JSON(500, gin.H{
+				"message": err.Error(),
+			})
+		} else {
+			err := DocService.ChangeState(id)
+			if err == nil {
+				c.JSON(200, gin.H{
+					"message": "Successfully Updated",
+				})
+			} else {
+				c.JSON(500, gin.H{
+					"message": err.Error(),
+				})
+			}
+		}
+	})
+	req, err := http.NewRequest(http.MethodPut, url, nil)
 	if err != nil {
 		panic(err)
 	}
@@ -806,6 +1559,44 @@ func SetupPostDocs(DocService DocService, body *bytes.Buffer) (*http.Request, *h
 		}
 	})
 	req, err := http.NewRequest(http.MethodPost, "/docs", body)
+	if err != nil {
+		panic(err)
+	}
+
+	req.Header.Set("Content-Type", "application/json")
+
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+	return req, w
+}
+
+func SetupValidateDocItem(DocService DocService, docItem entity.DocItem) (*http.Request, *httptest.ResponseRecorder) {
+	gin.SetMode(gin.ReleaseMode)
+	r := gin.Default()
+
+	r.POST("/docs/validate_doc_item", func(c *gin.Context) {
+		var docItem entity.DocItem
+		err := c.ShouldBindJSON(&docItem)
+		if err != nil {
+			c.JSON(500, gin.H{
+				"message": err.Error(),
+			})
+		} else {
+			err = DocService.ValidateDocItem(docItem)
+			if err != nil {
+				c.JSON(500, gin.H{
+					"message": err.Error(),
+				})
+			} else {
+				c.JSON(200, entity.Codes{Moein: docItem.Moein, Tafsili: docItem.Tafsili})
+			}
+		}
+	})
+	reqBody, err := json.Marshal(docItem)
+	if err != nil {
+		panic(err)
+	}
+	req, err := http.NewRequest(http.MethodPost, "/docs/validate_doc_item", bytes.NewBuffer(reqBody))
 	if err != nil {
 		panic(err)
 	}
