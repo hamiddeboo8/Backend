@@ -3,6 +3,7 @@ package service
 import (
 	"AccountingDoc/Gin-Server/entity"
 	"errors"
+	"strconv"
 
 	"gorm.io/driver/postgres"
 	"gorm.io/gorm"
@@ -172,6 +173,12 @@ func (service *docService) Save(doc entity.Doc) error {
 		res = tx.Model(&entity.GlobalVars{}).Where("1 = 1").Updates(map[string]interface{}{"today_count": gorm.Expr("today_count + ?", 1), "atf_num_global": gorm.Expr("atf_num_global + ?", 1)})
 		if res.Error != nil {
 			return res.Error
+		}
+		for i := 0; i < len(doc.MinorNum); i++ {
+			_, err := strconv.Atoi(string(doc.MinorNum[i]))
+			if err != nil {
+				return errors.New("minor num must be all digit")
+			}
 		}
 		var date Date
 		res = tx.Clauses(clause.Locking{Strength: "UPDATE"}).Model(&entity.Doc{}).Where("state = ?", "دائمی").Order("year desc, month desc, day desc, hour desc, minute desc, second desc").Limit(1).Find(&date)

@@ -5,6 +5,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io/ioutil"
 	"math/rand"
 	"net/http"
@@ -354,7 +355,7 @@ func Test_PostDocs(t *testing.T) {
 	}
 }
 
-func FuzzPostDocs(f *testing.F) {
+func TestSave(t *testing.T) {
 	db := NewDbConnectionTest()
 	glb := &entity.GlobalVars{}
 	glb.AtfNumGlobal = 1
@@ -364,18 +365,120 @@ func FuzzPostDocs(f *testing.F) {
 	DocService := New(db)
 	defer DocService.CloseDB()
 	defer ClearTable(&DocService)
-	n := 1000
+	n := 10
 	rand.Seed(int64(n))
+
 	_, err := Init(DocService, n)
 	if err != nil {
 		ClearTable(&DocService)
-		panic(err.Error())
+		t.Errorf(err.Error())
 	}
 
-	f.Fuzz(func(t *testing.T, docItems []entity.DocItem, doc entity.Doc) {
+	var doc entity.Doc
+	num_of_items := 10
+	docItems := []entity.DocItem{}
+	for i := 0; i < num_of_items; i++ {
+		docItems = append(docItems, *createRandomDocItem(i + 1))
+	}
+	doc.DocItems = docItems
+	doc.AtfNum = atf_num_global
+	//atf_num_global += 1
+	doc.DailyNum = daily_num_global
+	//daily_num_global += 1
+	doc.Year = 1401
+	doc.Month = 1
+	doc.Day = 29
+	doc.Hour = rand.Intn(23) + 1
+	doc.Minute = rand.Intn(59) + 1
+	doc.Second = rand.Intn(59) + 1
+	doc.Desc = descs[rand.Intn(8)]
+	doc.DocNum = 0
+	doc.DocType = "عمومی"
+	doc.EmitSystem = "سیستم حسابداری"
+	doc.IsChanging = false
+	doc.MinorNum = minorNums[rand.Intn(6)]
+	doc.State = "موقت"
+	err = DocService.Save(doc)
+	if err != nil {
+		t.Error(err.Error())
+	}
+	//reqBody, err = json.Marshal(doc)
+}
+
+/*func FuzzSave(f *testing.F) {
+	db := NewDbConnectionTest()
+	glb := &entity.GlobalVars{}
+	glb.AtfNumGlobal = 1
+	glb.TodayCount = 1
+	db.Create(glb)
+
+	DocService := New(db)
+	defer DocService.CloseDB()
+	defer ClearTable(&DocService)
+	n := 10
+	rand.Seed(int64(n))
+
+	f.Fuzz(func(t *testing.T, num_of_items int, month int, day int, desc string, minor_num string) {
+		var err error
+		moeins, tafsilis, err = CreateMoeinTafsili(DocService)
+		if err != nil {
+			t.Fail()
+		}
+
+		atf_num_global = 1
+		daily_num_global = 1
+
+		minorNums = []string{"", "0120", "0310", "0010", "5000", "3050"}
+		descs = []string{"desc1", "desc2", "desc3", "desc4", "desc5", "desc6", "desc7", "desc8"}
+		currs = []string{"$", "€", "¥", "£", "₽"}
+		currRates = []int{27800, 30200, 22200, 36400, 348}
+		descItems = []string{}
+		for i := 0; i < 50; i++ {
+			descItems = append(descItems, "descItem"+strconv.Itoa(i+1))
+		}
+		var doc entity.Doc
+		var docItems []entity.DocItem = make([]entity.DocItem, num_of_items)
+		doc.DocItems = make([]entity.DocItem, num_of_items)
+		t.Log(num_of_items, month, day, desc, minor_num)
+		for i := 0; i < num_of_items; i++ {
+			docItems = append(docItems, *createRandomDocItem(i + 1))
+		}
 		doc.DocItems = docItems
-		DocService.Save(doc)
+		doc.AtfNum = atf_num_global
+		//atf_num_global += 1
+		doc.DailyNum = daily_num_global
+		//daily_num_global += 1
+		doc.Year = 1401
+		doc.Month = month
+		doc.Day = day
+		doc.Hour = rand.Intn(23) + 1
+		doc.Minute = rand.Intn(59) + 1
+		doc.Second = rand.Intn(59) + 1
+		doc.Desc = desc
+		doc.DocNum = 0
+		doc.DocType = "عمومی"
+		doc.EmitSystem = "سیستم حسابداری"
+		doc.IsChanging = false
+		doc.MinorNum = minor_num
+		doc.State = "موقت"
+		err = DocService.Save(doc)
+		if err != nil {
+			if month <= 12 && month > 0 && day > 0 && day < 32 && checkMinor(minor_num) {
+				t.Fail()
+			}
+		}
 	})
+}*/
+
+func checkMinor(str string) bool {
+	for i := 0; i < len(str); i++ {
+		fmt.Println(string(str[i]))
+		_, err := strconv.Atoi(string(str[i]))
+		if err != nil {
+			return false
+		}
+	}
+	return true
 }
 
 func Test_GetDocs(t *testing.T) {
