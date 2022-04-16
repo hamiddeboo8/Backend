@@ -66,7 +66,7 @@ func NewDbConnection() *gorm.DB {
 
 	db.AutoMigrate(&entity.GlobalVars{}, &entity.Doc{}, &entity.DocItem{})
 
-	if db.Migrator().HasTable(&entity.GlobalVars{}) {
+	/*if db.Migrator().HasTable(&entity.GlobalVars{}) {
 		db.Migrator().DropTable(&entity.GlobalVars{})
 	}
 	if db.Migrator().HasTable(&entity.Doc{}) {
@@ -74,7 +74,7 @@ func NewDbConnection() *gorm.DB {
 	}
 	if db.Migrator().HasTable(&entity.DocItem{}) {
 		db.Migrator().DropTable(&entity.DocItem{})
-	}
+	}*/
 
 	if !db.Migrator().HasTable(&entity.Moein{}) {
 		db.Migrator().CreateTable(&entity.Moein{})
